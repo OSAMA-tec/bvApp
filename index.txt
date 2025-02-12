@@ -1,0 +1,61 @@
+Let me analyze your current pages and suggest additional ones needed for your real estate + blockchain + ML project.
+
+**Current Pages You Have:**
+1. Welcome/Onboarding Page
+2. Sign Up Page
+3. Home Page (Property Listings)
+4. Create Property Listing Page
+5. Profile Page
+
+**Additional Pages Needed:**
+
+1. **ML Prediction Pages:**
+   - Property Analysis Dashboard   -done
+   - Price Prediction Results      --done
+   - Investment Risk Assessment    --done
+   - Market Trends Analysis        --done
+   - Area Development Metrics      --done
+
+2. **Blockchain/NFT Pages:**
+   - Wallet Connection Page        done
+   - NFT Minting Dashboard         done
+   - Token Transfer Page           done
+   - Transaction History           donne
+   - Smart Contract Interaction Page      done
+
+3. **Property Verification Pages:**         all donne
+   - Document Verification Portal
+   - KYC/AML Verification
+   - Property Inspection Reports
+   - Legal Compliance Check
+   - Title Verification Status
+
+4. **Investment Pages:**                       all donne
+   - Investment Portfolio Dashboard
+   - ROI Calculator
+   - Investment Performance Tracking
+   - Dividend/Returns History
+   - Investment Comparison Tool
+
+5. **Payment & Transaction Pages:**          all done
+   - Payment Gateway (Crypto/Fiat)
+   - Transaction Status
+   - Payment History
+   - Invoice Generation
+   - Receipt Management
+
+6. **Additional User Pages:**
+   - Settings/Preferences
+   - Notification Center
+   - Help & Support
+   - FAQ/Documentation
+   - Chat/Support Ticket System
+
+7. **Admin/Management Pages:**
+   - Admin Dashboard
+   - User Management
+   - Property Verification Queue
+   - Transaction Monitoring
+   - System Analytics
+
+These additional pages would create a complete ecosystem for your real estate platform, incorporating all three aspects: real estate, blockchain, and machine learning. Would you like me to elaborate on any specific page's features or functionality?

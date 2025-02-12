@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "BlockVest",
+    "slug": "blockvest",
+    "version": "1.0.1",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#161622"
+    },
+    "scheme": "blockvest",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.jsm.blockvest"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo-removebg-preview.png",
+        "backgroundColor": "#161622"
+      },
+      "package": "com.jsm.blockvest",
+      "versionCode": 2,
+      "permissions": [],
+      "softwareKeyboardLayoutMode": "pan"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "tsconfigPaths": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "9cdc44f6-c162-4637-ab82-2a1b254547bf"
+      }
+    }
+  }
+}
