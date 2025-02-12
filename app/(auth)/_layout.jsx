@@ -7,23 +7,22 @@ import { useGlobalContext } from "../../context/GlobalProvider";
 const AuthLayout = () => {
   const { loading, isLogged } = useGlobalContext();
 
-  if (!loading && isLogged) return <Redirect href="/home" />;
+  // Only redirect if we're not loading and user is logged in
+  if (!loading && isLogged) {
+    return <Redirect href="/(tabs)" />;
+  }
 
   return (
     <>
-      <Stack>
-        <Stack.Screen
-          name="sign-in"
-          options={{
-            headerShown: false,
-          }}
-        />
-        <Stack.Screen
-          name="sign-up"
-          options={{
-            headerShown: false,
-          }}
-        />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: "slide_from_right",
+        }}
+      >
+        <Stack.Screen name="sign-in" />
+        <Stack.Screen name="sign-up" />
+        <Stack.Screen name="verify-email" />
       </Stack>
 
       <Loader isLoading={loading} />

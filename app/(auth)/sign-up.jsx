@@ -7,34 +7,36 @@ import * as Animatable from "react-native-animatable";
 import { images } from "../../constants";
 import { CustomButton, FormField } from "../../components";
 import { useGlobalContext } from "../../context/GlobalProvider";
+import { authAPI } from "../../lib/api";
 
 const SignUp = () => {
-  const { setUser, setIsLogged } = useGlobalContext();
-
+  const { setUser } = useGlobalContext();
   const [isSubmitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
-    username: "",
+    name: "",
     email: "",
     password: "",
   });
 
-  const submit = () => {
-    if (form.username === "" || form.email === "" || form.password === "") {
+  const submit = async () => {
+    if (form.name === "" || form.email === "" || form.password === "") {
       Alert.alert("Error", "Please fill in all fields");
       return;
     }
 
-    setSubmitting(true);
-
-    setTimeout(() => {
-      setUser({
-        email: form.email,
-        username: form.username
-      }); // Set minimal user data
-      setIsLogged(true);
+    try {
+      setSubmitting(true);
+      const response = await authAPI.register(form);
+      setUser(response.user);
+      router.push({
+        pathname: "/verify-email",
+        params: { email: form.email }
+      });
+    } catch (error) {
+      Alert.alert("Error", error.message || "Registration failed");
+    } finally {
       setSubmitting(false);
-      router.replace("/home");
-    }, 1000);
+    }
   };
 
   return (
@@ -91,9 +93,9 @@ const SignUp = () => {
             delay={500}
           >
             <FormField
-              title="Username"
-              value={form.username}
-              handleChangeText={(e) => setForm({ ...form, username: e })}
+              title="Full Name"
+              value={form.name}
+              handleChangeText={(e) => setForm({ ...form, name: e })}
               otherStyles="mt-7"
             />
 
@@ -103,6 +105,7 @@ const SignUp = () => {
               handleChangeText={(e) => setForm({ ...form, email: e })}
               otherStyles="mt-7"
               keyboardType="email-address"
+              autoCapitalize="none"
             />
 
             <FormField
@@ -110,6 +113,7 @@ const SignUp = () => {
               value={form.password}
               handleChangeText={(e) => setForm({ ...form, password: e })}
               otherStyles="mt-7"
+              secureTextEntry
             />
           </Animatable.View>
 
