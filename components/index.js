@@ -6,6 +6,9 @@ import Loader from "./Loader";
 import Trending from "./Trending";
 import SearchInput from "./SearchInput";
 import EmptyState from "./EmptyState";
+import AnalysisHeader from "./AnalysisHeader";
+import VideoCard from "./VideoCard";
+import TokenizationModal from "./TokenizationModal";
 
 export {
   NFTCard,
@@ -16,4 +19,7 @@ export {
   Trending,
   SearchInput,
   EmptyState,
+  AnalysisHeader,
+  VideoCard,
+  TokenizationModal,
 };

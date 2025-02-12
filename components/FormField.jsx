@@ -1,45 +1,64 @@
-import { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, Image } from "react-native";
+import React, { memo } from "react";
+import { View, Text, TextInput } from "react-native";
+import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Animatable from "react-native-animatable";
 
-import { icons } from "../constants";
-
-const FormField = ({
+const FormField = memo(({
   title,
   value,
   placeholder,
-  handleChangeText,
-  otherStyles,
-  ...props
+  iconName,
+  keyboardType = "default",
+  required = false,
+  secureTextEntry = false,
+  onChangeText,
+  otherStyles = "",
+  autoCapitalize = "none"
 }) => {
-  const [showPassword, setShowPassword] = useState(false);
+  const handleChange = (text) => {
+    if (typeof onChangeText === 'function') {
+      const fieldName = title.toLowerCase().replace(/\s+/g, ''); // Remove spaces from field name
+      onChangeText(text, fieldName);
+    }
+  };
 
   return (
-    <View className={`space-y-2 ${otherStyles}`}>
-      <Text className="text-base text-gray-100 font-pmedium">{title}</Text>
-
-      <View className="w-full h-16 px-4 bg-black-100 rounded-2xl border-2 border-black-200 focus:border-secondary flex flex-row items-center">
-        <TextInput
-          className="flex-1 text-white font-psemibold text-base"
-          value={value}
-          placeholder={placeholder}
-          placeholderTextColor="#7B7B8B"
-          onChangeText={handleChangeText}
-          secureTextEntry={title === "Password" && !showPassword}
-          {...props}
-        />
-
-        {title === "Password" && (
-          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-            <Image
-              source={!showPassword ? icons.eye : icons.eyeHide}
-              className="w-6 h-6"
-              resizeMode="contain"
-            />
-          </TouchableOpacity>
+    <Animatable.View
+      animation="fadeInUp"
+      delay={300}
+      className={`mt-5 space-y-2 ${otherStyles}`}
+    >
+      <View className="flex-row items-center justify-between">
+        <Text className="text-base text-gray-100 font-pmedium">
+          {title}
+        </Text>
+        {required && (
+          <Text className="text-secondary text-sm">Required *</Text>
         )}
       </View>
-    </View>
+      <LinearGradient
+        colors={['rgba(175, 103, 219, 0.1)', 'rgba(25, 77, 181, 0.1)']}
+        className="rounded-xl p-0.5"
+      >
+        <View className="flex-row items-center bg-[#1a1a1a] rounded-xl p-3">
+          <MaterialCommunityIcons name={iconName} size={24} color="#af67db" />
+          <TextInput
+            value={value || ''}
+            placeholder={placeholder}
+            placeholderTextColor="#666"
+            keyboardType={keyboardType}
+            secureTextEntry={secureTextEntry}
+            autoCapitalize={autoCapitalize}
+            onChangeText={handleChange}
+            className="flex-1 ml-3 text-white font-pregular"
+          />
+        </View>
+      </LinearGradient>
+    </Animatable.View>
   );
-};
+});
+
+FormField.displayName = 'FormField';
 
 export default FormField;

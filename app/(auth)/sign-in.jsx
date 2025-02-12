@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Link, router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { View, Text, ScrollView, Dimensions, Alert, Image } from "react-native";
@@ -16,7 +16,15 @@ const SignIn = () => {
     password: "",
   });
 
-  // Simplified submit function without API calls
+  const handleFormChange = useCallback((value, fieldName) => {
+    if (fieldName) {
+      setForm(prev => ({
+        ...prev,
+        [fieldName]: value
+      }));
+    }
+  }, []);
+
   const submit = () => {
     if (form.email === "" || form.password === "") {
       Alert.alert("Error", "Please fill in all fields");
@@ -90,16 +98,22 @@ const SignIn = () => {
             <FormField
               title="Email"
               value={form.email}
-              handleChangeText={(e) => setForm({ ...form, email: e })}
-              otherStyles="mt-7"
+              placeholder="Enter your email"
+              iconName="email-outline"
               keyboardType="email-address"
+              required
+              onChangeText={handleFormChange}
+              autoCapitalize="none"
             />
 
             <FormField
               title="Password"
               value={form.password}
-              handleChangeText={(e) => setForm({ ...form, password: e })}
-              otherStyles="mt-7"
+              placeholder="Enter your password"
+              iconName="lock-outline"
+              secureTextEntry
+              required
+              onChangeText={handleFormChange}
             />
           </Animatable.View>
 
