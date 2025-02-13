@@ -48,14 +48,40 @@ const WalletConnection = () => {
 
     // Get wallet balance using Web3 instead of ethers.js
     const getBalance = async (address) => {
+        // Temporarily set static balance
+        setBalance('0.0000');
+
+        /* Commenting out balance fetch for now
         try {
-            const balanceWei = await web3.eth.getBalance(address);
-            const balanceEth = web3.utils.fromWei(balanceWei, 'ether');
-            setBalance(parseFloat(balanceEth).toFixed(4));
+            // Validate address format
+            if (!web3.utils.isAddress(address)) {
+                console.warn('Invalid Ethereum address');
+                setBalance('0');
+                return;
+            }
+
+            // Use a try-catch block specifically for the balance fetch
+            try {
+                const balanceWei = await web3.eth.getBalance(address);
+                if (balanceWei) {
+                    const balanceEth = web3.utils.fromWei(balanceWei, 'ether');
+                    setBalance(parseFloat(balanceEth).toFixed(4));
+                } else {
+                    console.warn('No balance returned');
+                    setBalance('0');
+                }
+            } catch (balanceError) {
+                console.warn('Balance fetch failed:', balanceError);
+                // Fallback to direct provider call if Web3 fails
+                const balance = await provider.getBalance(address);
+                const balanceEth = ethers.utils.formatEther(balance);
+                setBalance(parseFloat(balanceEth).toFixed(4));
+            }
         } catch (error) {
-            console.error('Error fetching balance:', error);
+            console.error('Error in getBalance:', error);
             setBalance('0');
         }
+        */
     };
 
     // Handle successful connection
@@ -131,7 +157,7 @@ const WalletConnection = () => {
                         {
                             text: "Yes",
                             onPress: async () => {
-                                const testAccount = '0x742d35Cc6634C0532925a3b844Bc454e4438f44e';
+                                const testAccount = '0xa26c86B84596DcCa2c0b990857f5622b1d9a1660';
                                 await handleSuccessfulConnection(testAccount);
                             }
                         }
