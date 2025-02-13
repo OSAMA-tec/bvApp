@@ -1,47 +1,18 @@
+import { useState, useEffect } from "react";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { View, Image, FlatList, TouchableOpacity, Text } from "react-native";
+import { View, Image, FlatList, TouchableOpacity, Text, ActivityIndicator, Alert } from "react-native";
 import * as Animatable from "react-native-animatable";
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { images, icons } from "../../constants";
 import { useGlobalContext } from "../../context/GlobalProvider";
 import { EmptyState, InfoBox } from "../../components";
+import { BASE_URL } from "../../lib/api";
 
-// Hardcoded investment data
-const investmentData = [
-  {
-    id: '1',
-    title: "Miami Beach Villa",
-    investment: "2.5 ETH",
-    returns: "12% APY",
-    thumbnail: images.cards,
-    status: "Active",
-    date: "Mar 15, 2024"
-  },
-  {
-    id: '2',
-    title: "Manhattan Penthouse",
-    investment: "1.8 ETH",
-    returns: "10.5% APY",
-    thumbnail: images.cards,
-    status: "Pending",
-    date: "Mar 10, 2024"
-  },
-  {
-    id: '3',
-    title: "Beverly Hills Estate",
-    investment: "3.2 ETH",
-    returns: "11.2% APY",
-    thumbnail: images.cards,
-    status: "Active",
-    date: "Feb 28, 2024"
-  }
-];
-
-const InvestmentCard = ({ item }) => (
+const PropertyCard = ({ item }) => (
   <Animatable.View
     animation="fadeInUp"
     className="mx-4 mb-6"
@@ -52,18 +23,18 @@ const InvestmentCard = ({ item }) => (
     >
       <View className="flex-row">
         <Image
-          source={item.thumbnail}
+          source={{ uri: item.images[0] || 'https://via.placeholder.com/400x300?text=No+Image' }}
           className="w-20 h-20 rounded-xl"
           resizeMode="cover"
         />
         <View className="flex-1 ml-4">
           <Text className="text-white font-psemibold text-lg">{item.title}</Text>
-          <Text className="text-gray-100 font-pregular mt-1">Invested: {item.investment}</Text>
+          <Text className="text-gray-100 font-pregular mt-1">Price: {item.price} ETH</Text>
           <View className="flex-row justify-between items-center mt-2">
-            <Text className="text-secondary font-pmedium">{item.returns}</Text>
-            <View className={`px-3 py-1 rounded-full ${item.status === 'Active' ? 'bg-green-500/20' : 'bg-yellow-500/20'}`}>
-              <Text className={`font-pbold ${item.status === 'Active' ? 'text-green-500' : 'text-yellow-500'}`}>
-                {item.status}
+            <Text className="text-secondary font-pmedium">{item.propertyType}</Text>
+            <View className={`px-3 py-1 rounded-full ${item.isTokenized ? 'bg-green-500/20' : 'bg-yellow-500/20'}`}>
+              <Text className={`font-pbold ${item.isTokenized ? 'text-green-500' : 'text-yellow-500'}`}>
+                {item.isTokenized ? 'Tokenized' : item.status}
               </Text>
             </View>
           </View>
@@ -961,13 +932,48 @@ const ProfileActions = () => {
 
 const Profile = () => {
   const { setUser, setIsLogged } = useGlobalContext();
+  const [properties, setProperties] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchUserProperties = async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+
+      const response = await fetch(`${BASE_URL}/properties/my-properties`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch properties');
+      }
+
+      const data = await response.json();
+      setProperties(data);
+    } catch (error) {
+      console.error('Error fetching properties:', error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUserProperties();
+  }, []);
 
   const userProfile = {
     username: "BlockVest Investor",
     avatar: images.profile,
-    totalInvestments: "7.5 ETH",
-    totalReturns: "0.9 ETH",
-    portfolioValue: "8.4 ETH"
+    totalProperties: properties.length,
+    totalValue: properties.reduce((sum, prop) => sum + (prop.price || 0), 0),
+    tokenizedProperties: properties.filter(prop => prop.isTokenized).length
   };
 
   const logout = () => {
@@ -976,13 +982,42 @@ const Profile = () => {
     router.replace("/sign-in");
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView className="bg-primary flex-1 justify-center items-center">
+        <ActivityIndicator size="large" color="#af67db" />
+        <Text className="text-white mt-4">Loading your properties...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView className="bg-primary flex-1 justify-center items-center px-4">
+        <Text className="text-white text-center mb-4">{error}</Text>
+        <TouchableOpacity
+          onPress={fetchUserProperties}
+          className="bg-secondary px-6 py-3 rounded-xl"
+        >
+          <Text className="text-white font-pbold">Try Again</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView className="bg-primary flex-1">
       <FlatList
-        data={investmentData}
-        keyExtractor={(item) => item.id}
+        data={properties}
+        keyExtractor={(item) => item._id}
         renderItem={({ item }) => (
-          <InvestmentCard item={item} />
+          <PropertyCard item={item} />
+        )}
+        ListEmptyComponent={() => (
+          <EmptyState
+            title="No Properties Found"
+            message="You haven't listed any properties yet."
+          />
         )}
         ListHeaderComponent={() => (
           <View className="px-4">
@@ -1036,33 +1071,35 @@ const Profile = () => {
               className="flex-row justify-between mb-8"
             >
               <View className="flex-1 items-center bg-black-100/50 rounded-xl p-4 mx-2">
-                <Text className="text-secondary font-pbold text-xl">{userProfile.totalInvestments}</Text>
-                <Text className="text-gray-100 font-pregular mt-1">Invested</Text>
+                <Text className="text-secondary font-pbold text-xl">{userProfile.totalProperties}</Text>
+                <Text className="text-gray-100 font-pregular mt-1">Properties</Text>
               </View>
               <View className="flex-1 items-center bg-black-100/50 rounded-xl p-4 mx-2">
-                <Text className="text-secondary font-pbold text-xl">{userProfile.totalReturns}</Text>
-                <Text className="text-gray-100 font-pregular mt-1">Returns</Text>
+                <Text className="text-secondary font-pbold text-xl">{userProfile.totalValue} ETH</Text>
+                <Text className="text-gray-100 font-pregular mt-1">Total Value</Text>
               </View>
               <View className="flex-1 items-center bg-black-100/50 rounded-xl p-4 mx-2">
-                <Text className="text-secondary font-pbold text-xl">{userProfile.portfolioValue}</Text>
-                <Text className="text-gray-100 font-pregular mt-1">Portfolio</Text>
+                <Text className="text-secondary font-pbold text-xl">{userProfile.tokenizedProperties}</Text>
+                <Text className="text-gray-100 font-pregular mt-1">Tokenized</Text>
               </View>
             </Animatable.View>
 
             {/* Actions Section */}
             <ProfileActions />
 
-            {/* Investments Header */}
+            {/* Properties Header */}
             <Animatable.View
               animation="fadeInUp"
               delay={700}
               className="mb-4"
             >
-              <Text className="text-white font-psemibold text-xl">My Investments</Text>
-              <Text className="text-gray-100 font-pregular mt-1">Your active property investments</Text>
+              <Text className="text-white font-psemibold text-xl">My Properties</Text>
+              <Text className="text-gray-100 font-pregular mt-1">Your listed properties</Text>
             </Animatable.View>
           </View>
         )}
+        refreshing={loading}
+        onRefresh={fetchUserProperties}
       />
     </SafeAreaView>
   );
