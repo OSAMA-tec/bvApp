@@ -55,10 +55,9 @@ const VerifyEmail = () => {
             if (response.success) {
                 Alert.alert("Success", "Email verified successfully", [
                     {
-                        text: "Continue",
+                        text: "Continue to Login",
                         onPress: () => {
-                            setIsLogged(true);
-                            router.replace("/home");
+                            router.replace("/sign-in");
                         },
                     },
                 ]);

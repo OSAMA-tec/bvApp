@@ -3,10 +3,12 @@ import { Link, router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { View, Text, ScrollView, Dimensions, Alert, Image } from "react-native";
 import * as Animatable from "react-native-animatable";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { images } from "../../constants";
 import { CustomButton, FormField } from "../../components";
 import { useGlobalContext } from "../../context/GlobalProvider";
+import { authAPI } from "../../lib/api";
 
 const SignIn = () => {
   const { setUser, setIsLogged } = useGlobalContext();
@@ -25,21 +27,31 @@ const SignIn = () => {
     }
   }, []);
 
-  const submit = () => {
+  const submit = async () => {
     if (form.email === "" || form.password === "") {
       Alert.alert("Error", "Please fill in all fields");
       return;
     }
 
-    setSubmitting(true);
+    try {
+      setSubmitting(true);
+      const response = await authAPI.login({
+        email: form.email,
+        password: form.password
+      });
 
-    // Simulate loading
-    setTimeout(() => {
-      setUser({ email: form.email }); // Set minimal user data
+      // Save token and user data
+      await AsyncStorage.setItem('token', response.token);
+      await AsyncStorage.setItem('user', JSON.stringify(response.user));
+
+      setUser(response.user);
       setIsLogged(true);
-      setSubmitting(false);
       router.replace("/home");
-    }, 1000);
+    } catch (error) {
+      Alert.alert("Error", error.message || "Login failed");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
