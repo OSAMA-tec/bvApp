@@ -288,16 +288,16 @@ const CategoryButton = ({ category, isSelected, onPress }) => (
   </TouchableOpacity>
 );
 
-// Add filter options before the Home component
+// ============ Filter Options ============
 const filterOptions = {
   priceRanges: [
-    { min: 0, max: 100000, label: "Under $100k" },
-    { min: 100000, max: 500000, label: "$100k - $500k" },
-    { min: 500000, max: 1000000, label: "$500k - $1M" },
-    { min: 1000000, max: null, label: "Over $1M" }
+    { min: 0, max: 100, label: "Under 100 ETH" },
+    { min: 100, max: 500, label: "100-500 ETH" },
+    { min: 500, max: 1000, label: "500-1000 ETH" },
+    { min: 1000, max: null, label: "Over 1000 ETH" }
   ],
-  propertyTypes: ["residential", "commercial", "land"],
-  locations: ["Miami", "New York", "Dubai", "Beverly Hills", "London"]
+  propertyTypes: ["residential", "commercial"],
+  status: ["pending", "tokenized", "sold"]
 };
 
 // Quick Filters Component
@@ -350,21 +350,21 @@ const QuickFilters = ({ activeFilter, setActiveFilter, selectedFilters, handleFi
         </LinearGradient>
       </TouchableOpacity>
 
-      {/* Location Filter */}
+      {/* Status Filter */}
       <TouchableOpacity
-        onPress={() => setActiveFilter(activeFilter === 'location' ? null : 'location')}
+        onPress={() => setActiveFilter(activeFilter === 'status' ? null : 'status')}
       >
         <LinearGradient
-          colors={activeFilter === 'location' ? ['#af67db', '#8547a8'] : ['rgba(26,26,26,0.9)', 'rgba(26,26,26,0.9)']}
+          colors={activeFilter === 'status' ? ['#af67db', '#8547a8'] : ['rgba(26,26,26,0.9)', 'rgba(26,26,26,0.9)']}
           className="rounded-full px-4 py-2 flex-row items-center"
         >
           <MaterialCommunityIcons
-            name="map-marker-outline"
+            name="tag-outline"
             size={20}
-            color={activeFilter === 'location' ? "#fff" : "#af67db"}
+            color={activeFilter === 'status' ? "#fff" : "#af67db"}
           />
-          <Text className={`ml-2 ${activeFilter === 'location' ? 'text-white' : 'text-gray-100'}`}>
-            {selectedFilters.location || "Location"}
+          <Text className={`ml-2 ${activeFilter === 'status' ? 'text-white' : 'text-gray-100'}`}>
+            {selectedFilters.status || "Status"}
           </Text>
         </LinearGradient>
       </TouchableOpacity>
@@ -402,7 +402,7 @@ const QuickFilters = ({ activeFilter, setActiveFilter, selectedFilters, handleFi
                 onPress={() => handleFilterSelect('propertyType', type)}
                 className="flex-row justify-between items-center py-2 px-3"
               >
-                <Text className="text-gray-100">{type}</Text>
+                <Text className="text-gray-100 capitalize">{type}</Text>
                 <View className={`w-5 h-5 rounded-full border border-secondary 
                   ${selectedFilters.propertyType === type ? 'bg-secondary' : ''}`}
                 />
@@ -411,17 +411,17 @@ const QuickFilters = ({ activeFilter, setActiveFilter, selectedFilters, handleFi
           </View>
         )}
 
-        {activeFilter === 'location' && (
+        {activeFilter === 'status' && (
           <View>
-            {filterOptions.locations.map((location) => (
+            {filterOptions.status.map((status) => (
               <TouchableOpacity
-                key={location}
-                onPress={() => handleFilterSelect('location', location)}
+                key={status}
+                onPress={() => handleFilterSelect('status', status)}
                 className="flex-row justify-between items-center py-2 px-3"
               >
-                <Text className="text-gray-100">{location}</Text>
+                <Text className="text-gray-100 capitalize">{status}</Text>
                 <View className={`w-5 h-5 rounded-full border border-secondary 
-                  ${selectedFilters.location === location ? 'bg-secondary' : ''}`}
+                  ${selectedFilters.status === status ? 'bg-secondary' : ''}`}
                 />
               </TouchableOpacity>
             ))}
@@ -437,14 +437,12 @@ const Home = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [properties, setProperties] = useState([]);
-  const featuredListRef = useRef(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState(null);
   const [selectedFilters, setSelectedFilters] = useState({
     priceRange: null,
     propertyType: null,
-    location: null
+    status: null
   });
 
   // Fetch properties
@@ -478,16 +476,21 @@ const Home = () => {
     setRefreshing(false);
   };
 
-  // Filter properties based on selected filters
+  // Filter properties based on selected filters and search query
   const getFilteredProperties = useCallback(() => {
     let filtered = properties;
 
-    if (selectedCategory !== 'All') {
+    // Apply search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
       filtered = filtered.filter(property =>
-        property.propertyType.toLowerCase().includes(selectedCategory.toLowerCase())
+        property.title.toLowerCase().includes(query) ||
+        property.description.toLowerCase().includes(query) ||
+        property.address.toLowerCase().includes(query)
       );
     }
 
+    // Apply price range filter
     if (selectedFilters.priceRange) {
       filtered = filtered.filter(property => {
         const price = property.price;
@@ -496,22 +499,24 @@ const Home = () => {
       });
     }
 
+    // Apply property type filter
     if (selectedFilters.propertyType) {
       filtered = filtered.filter(property =>
         property.propertyType.toLowerCase() === selectedFilters.propertyType.toLowerCase()
       );
     }
 
-    if (selectedFilters.location) {
+    // Apply status filter
+    if (selectedFilters.status) {
       filtered = filtered.filter(property =>
-        property.address.toLowerCase().includes(selectedFilters.location.toLowerCase())
+        property.status.toLowerCase() === selectedFilters.status.toLowerCase()
       );
     }
 
     return filtered;
-  }, [properties, selectedCategory, selectedFilters]);
+  }, [properties, searchQuery, selectedFilters]);
 
-  // Add handleFilterSelect function
+  // Handle filter selection
   const handleFilterSelect = useCallback((filterType, value) => {
     setSelectedFilters(prev => ({
       ...prev,
@@ -574,7 +579,7 @@ const Home = () => {
           </Animatable.Text>
         </Animatable.View>
 
-        {/* Logo without gradient background */}
+        {/* Logo */}
         <Animatable.View
           animation="zoomIn"
           duration={1000}
@@ -596,27 +601,18 @@ const Home = () => {
         </Animatable.View>
       </Animatable.View>
 
-      {/* Search and Filter Section */}
+      {/* Search Input */}
       <Animatable.View
-        animation="fadeInUp"
-        duration={1000}
+        animation="fadeInDown"
         delay={800}
-        className="px-4 mb-4"
+        className="px-4 mb-6"
       >
-        <View className="flex-row items-center space-x-2">
-          <View className="flex-1">
-            <SearchInput
-              placeholder="Search properties..."
-              containerStyle="bg-[#1a1a1a]"
-            />
-          </View>
-          <TouchableOpacity
-            onPress={() => setActiveFilter(null)}
-            className="bg-[#1a1a1a] p-3 rounded-xl"
-          >
-            <MaterialCommunityIcons name="filter-variant" size={24} color="#af67db" />
-          </TouchableOpacity>
-        </View>
+        <SearchInput
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search properties..."
+          containerStyle="bg-[#1a1a1a]"
+        />
       </Animatable.View>
 
       {/* Quick Filters */}
@@ -627,90 +623,20 @@ const Home = () => {
         handleFilterSelect={handleFilterSelect}
       />
 
-      {/* Interactive Categories */}
+      {/* Properties Count */}
       <Animatable.View
-        animation="fadeInUp"
+        animation="fadeIn"
         duration={1000}
-        delay={1200}
-        className="px-4 mb-6"
+        delay={1000}
+        className="px-4 mt-6 mb-4"
       >
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          className="space-x-3"
-        >
-          {['All', 'Villas', 'Apartments', 'Penthouses', 'Mansions'].map((category) => (
-            <CategoryButton
-              key={category}
-              category={category}
-              isSelected={selectedCategory === category}
-              onPress={() => {
-                setSelectedCategory(category);
-                // Add your filter logic here
-                const filteredData = category === 'All'
-                  ? nftData
-                  : nftData.filter(item =>
-                    item.propertyType.toLowerCase().includes(category.toLowerCase())
-                  );
-                // Update your displayed data here
-              }}
-            />
-          ))}
-        </ScrollView>
+        <Text className="text-white font-psemibold text-xl">
+          Available Properties
+        </Text>
+        <Text className="text-gray-100">
+          {getFilteredProperties().length} properties found
+        </Text>
       </Animatable.View>
-
-      {/* Featured Properties Section */}
-      <View>
-        <Animatable.View
-          animation="fadeInLeft"
-          duration={1000}
-          delay={1400}
-          className="px-4 mb-4"
-        >
-          <Text className="text-xl font-psemibold text-white">
-            Featured Properties
-          </Text>
-          <Text className="text-gray-100 font-pregular mt-1">
-            Premium real estate opportunities
-          </Text>
-        </Animatable.View>
-
-        <FlatList
-          ref={featuredListRef}
-          data={getFilteredProperties()}
-          keyExtractor={(item) => item._id}
-          renderItem={({ item, index }) => (
-            <Animatable.View
-              animation="fadeInUp"
-              delay={index * 200}
-            >
-              <NFTCard {...item} />
-            </Animatable.View>
-          )}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={(event) => {
-            const newIndex = Math.round(
-              event.nativeEvent.contentOffset.x / width
-            );
-            setCurrentIndex(newIndex);
-          }}
-        />
-
-        {/* Pagination Dots */}
-        <View className="flex-row justify-center mt-4 space-x-2">
-          {getFilteredProperties().map((_, index) => (
-            <View
-              key={index}
-              className={`h-2 rounded-full ${index === currentIndex
-                ? 'w-4 bg-secondary'
-                : 'w-2 bg-gray-500'
-                }`}
-            />
-          ))}
-        </View>
-      </View>
     </View>
   );
 
@@ -740,9 +666,10 @@ const Home = () => {
           paddingBottom: 100
         }}
         ListEmptyComponent={() => (
-          <View className="flex-1 justify-center items-center py-20">
-            <Text className="text-white text-lg">No properties found</Text>
-          </View>
+          <EmptyState
+            title="No Properties Found"
+            message="Try adjusting your search or filters"
+          />
         )}
       />
     </SafeAreaView>

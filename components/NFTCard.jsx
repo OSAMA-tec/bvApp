@@ -21,6 +21,7 @@ const DetailRow = ({ label, value }) => (
         <Text className="text-white font-psemibold">{value}</Text>
     </View>
 );
+
 // Helper function for status color
 const getStatusColor = (status) => {
     const colors = {
@@ -28,6 +29,7 @@ const getStatusColor = (status) => {
         'approved': 'bg-green-500/80',
         'rejected': 'bg-red-500/80',
         'tokenized': 'bg-secondary/80',
+        'sold': 'bg-blue-500/80',
         'Available': 'bg-green-500/80',
         'Featured': 'bg-secondary/80',
         'Hot': 'bg-red-500/80',
@@ -38,9 +40,29 @@ const getStatusColor = (status) => {
     };
     return colors[status] || colors.default;
 };
+
+// History Item Component
+const HistoryItem = ({ item }) => (
+    <View className="mb-4 bg-black-100/50 p-4 rounded-xl">
+        <View className="flex-row justify-between mb-2">
+            <Text className="text-secondary font-pbold capitalize">{item.type}</Text>
+            <Text className="text-gray-100">{new Date(item.date).toLocaleDateString()}</Text>
+        </View>
+        <DetailRow label="Price" value={`${item.price} ETH`} />
+        {item.from && <DetailRow label="From" value={item.from} />}
+        {item.to && <DetailRow label="To" value={item.to} />}
+        <DetailRow label="Transaction Hash" value={item.transactionHash.substring(0, 10) + '...'} />
+        {item.tokenId && <DetailRow label="Token ID" value={item.tokenId} />}
+        {item.contractAddress && (
+            <DetailRow
+                label="Contract"
+                value={item.contractAddress.substring(0, 8) + '...'}
+            />
+        )}
+    </View>
+);
+
 const NFTDetailsModal = ({ visible, onClose, ...props }) => {
-
-
     return (
         <Modal
             visible={visible}
@@ -58,11 +80,13 @@ const NFTDetailsModal = ({ visible, onClose, ...props }) => {
                     </View>
 
                     {/* Main Image */}
-                    <Image
-                        source={props.thumbnail}
-                        className="w-full h-[300px]"
-                        resizeMode="cover"
-                    />
+                    {props.thumbnail && (
+                        <Image
+                            source={{ uri: props.thumbnail }}
+                            className="w-full h-[300px]"
+                            resizeMode="cover"
+                        />
+                    )}
 
                     {/* Content Container */}
                     <View className="p-4">
@@ -94,8 +118,17 @@ const NFTDetailsModal = ({ visible, onClose, ...props }) => {
                         <View className="flex-row justify-between mb-6 bg-black-100 p-4 rounded-xl">
                             <StatItem icon="🛏️" value={props.bedrooms} label="Bedrooms" />
                             <StatItem icon="🚿" value={props.bathrooms} label="Bathrooms" />
-                            <StatItem icon="📏" value={props.area} label="Area" />
-                            <StatItem icon="💰" value={props.returns} label="Returns" />
+                            <StatItem icon="📏" value={`${props.area} sqft`} label="Area" />
+                            <StatItem icon="📅" value={props.yearBuilt} label="Year" />
+                        </View>
+
+                        {/* Owner Information */}
+                        <View className="mb-6">
+                            <Text className="text-white font-pbold text-lg mb-2">Owner</Text>
+                            <View className="bg-black-100 p-4 rounded-xl">
+                                <DetailRow label="Name" value={props.owner.name} />
+                                <DetailRow label="Email" value={props.owner.email} />
+                            </View>
                         </View>
 
                         {/* Description */}
@@ -104,39 +137,68 @@ const NFTDetailsModal = ({ visible, onClose, ...props }) => {
                             <Text className="text-gray-100 leading-5">{props.description}</Text>
                         </View>
 
-                        {/* Amenities */}
+                        {/* Property Details */}
                         <View className="mb-6">
-                            <Text className="text-white font-pbold text-lg mb-2">Amenities</Text>
-                            <View className="flex-row flex-wrap gap-2">
-                                {props.amenities.map((amenity, index) => (
-                                    <View key={index} className="bg-black-100 px-3 py-1 rounded-full">
-                                        <Text className="text-gray-100">{amenity}</Text>
-                                    </View>
+                            <Text className="text-white font-pbold text-lg mb-2">Property Details</Text>
+                            <View className="bg-black-100 p-4 rounded-xl">
+                                <DetailRow label="Property ID" value={props.propertyId} />
+                                <DetailRow label="Construction Status" value={props.constructionStatus} />
+                                <DetailRow label="Legal Description" value={props.legalDescription} />
+                                <DetailRow label="Verification Status" value={props.isVerified ? 'Verified' : 'Pending'} />
+                            </View>
+                        </View>
+
+                        {/* Tokenization Details */}
+                        {props.isTokenized && (
+                            <View className="mb-6">
+                                <Text className="text-white font-pbold text-lg mb-2">Tokenization Details</Text>
+                                <View className="bg-black-100 p-4 rounded-xl">
+                                    <DetailRow label="Token ID" value={props.tokenId} />
+                                    <DetailRow
+                                        label="Contract Address"
+                                        value={props.contractAddress ?
+                                            props.contractAddress.substring(0, 8) + '...' :
+                                            'Not Available'
+                                        }
+                                    />
+                                    <DetailRow label="Token URI" value={props.tokenURI || 'Not Available'} />
+                                </View>
+                            </View>
+                        )}
+
+                        {/* Transaction History */}
+                        {props.history && props.history.length > 0 && (
+                            <View className="mb-6">
+                                <Text className="text-white font-pbold text-lg mb-2">Transaction History</Text>
+                                {props.history.map((item, index) => (
+                                    <HistoryItem key={index} item={item} />
                                 ))}
                             </View>
-                        </View>
+                        )}
 
-                        {/* Investment Details */}
-                        <View className="mb-6">
-                            <Text className="text-white font-pbold text-lg mb-2">Investment Details</Text>
-                            <View className="bg-black-100 p-4 rounded-xl">
-                                <DetailRow label="Minimum Investment" value={props.investmentDetails.minInvestment} />
-                                <DetailRow label="Total Investors" value={props.investmentDetails.totalInvestors} />
-                                <DetailRow label="Total Raised" value={props.investmentDetails.totalRaised} />
-                                <DetailRow label="Target Raise" value={props.investmentDetails.targetRaise} />
-                                <DetailRow label="Property Value" value={props.investmentDetails.propertyValue} />
-                            </View>
+                        {/* Action Buttons */}
+                        <View className="flex-row gap-4 mb-6">
+                            {props.isTokenized && (
+                                <TouchableOpacity
+                                    className="flex-1 bg-secondary py-4 rounded-xl"
+                                    activeOpacity={0.7}
+                                >
+                                    <Text className="text-white font-pbold text-center">
+                                        Transfer
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                            {!props.isTokenized && (
+                                <TouchableOpacity
+                                    className="flex-1 bg-secondary py-4 rounded-xl"
+                                    activeOpacity={0.7}
+                                >
+                                    <Text className="text-white font-pbold text-center">
+                                        Tokenize
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
-
-                        {/* Investment Button */}
-                        <TouchableOpacity
-                            className="bg-secondary py-4 rounded-xl mb-6"
-                            activeOpacity={0.7}
-                        >
-                            <Text className="text-white font-pbold text-center text-lg">
-                                Invest Now
-                            </Text>
-                        </TouchableOpacity>
                     </View>
                 </ScrollView>
             </SafeAreaView>
@@ -147,16 +209,15 @@ const NFTDetailsModal = ({ visible, onClose, ...props }) => {
 const NFTCard = (props) => {
     const [showDetails, setShowDetails] = useState(false);
 
-    // Format price to ETH (using actual price)
+    // Format price to ETH
     const formatPriceToEth = (price) => {
         if (!price) return '0 ETH';
         return `${price} ETH`;
     };
 
-    // Format price to USD (using actual price with ETH current rate)
+    // Format price to USD (using current ETH price of approximately $3000 USD)
     const formatPriceToUSD = (price) => {
         if (!price) return '$0';
-        // Using current ETH price of approximately $3000 USD
         const usdPrice = price * 3000;
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
@@ -166,47 +227,20 @@ const NFTCard = (props) => {
         }).format(usdPrice);
     };
 
-    // Format coordinates to location string
+    // Format location string
     const formatLocation = (location, address) => {
         if (location?.coordinates) {
-            return `${address} (${location.coordinates[0]}, ${location.coordinates[1]})`;
+            return address || 'Location not specified';
         }
         return address || 'Location not specified';
     };
 
-    // Format returns (dummy data for now)
-    const formatReturns = () => {
-        return '10-12% APY';
-    };
-
     const propertyData = {
-        title: props.title,
+        ...props,
         price: formatPriceToEth(props.price),
         usdPrice: formatPriceToUSD(props.price),
         location: formatLocation(props.location, props.address),
-        status: props.status || 'pending',
-        propertyType: props.propertyType || 'Not specified',
-        bedrooms: props.bedrooms || 'N/A',
-        bathrooms: props.bathrooms || 'N/A',
-        area: props.area ? `${props.area} sq ft` : 'N/A',
-        returns: formatReturns(),
-        description: props.description || 'No description available',
-        amenities: props.amenities || ['Not specified'],
         thumbnail: props.images?.[0] || 'https://via.placeholder.com/400x300?text=No+Image',
-        investmentDetails: {
-            minInvestment: formatPriceToEth(props.price * 0.1),
-            totalInvestors: '0',
-            totalRaised: '0 ETH',
-            targetRaise: formatPriceToEth(props.price),
-            propertyValue: formatPriceToUSD(props.price)
-        },
-        owner: props.owner || { name: 'Unknown' },
-        yearBuilt: props.yearBuilt || 'N/A',
-        constructionStatus: props.constructionStatus || 'Not specified',
-        legalDescription: props.legalDescription || 'Not available',
-        propertyId: props.propertyId || 'Not assigned',
-        isVerified: props.isVerified || false,
-        createdAt: new Date(props.createdAt).toLocaleDateString() || 'Unknown date'
     };
 
     return (
@@ -261,8 +295,8 @@ const NFTCard = (props) => {
                         <View className="flex-row justify-between mb-4">
                             <StatItem icon="🛏️" value={propertyData.bedrooms} label="Beds" />
                             <StatItem icon="🚿" value={propertyData.bathrooms} label="Baths" />
-                            <StatItem icon="📏" value={propertyData.area} label="Area" />
-                            <StatItem icon="💰" value={propertyData.returns} label="ROI" />
+                            <StatItem icon="📏" value={`${propertyData.area} sqft`} label="Area" />
+                            <StatItem icon="📅" value={propertyData.yearBuilt} label="Year" />
                         </View>
 
                         {/* View Details Button */}

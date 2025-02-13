@@ -503,9 +503,9 @@ const Create = () => {
             onChangeText={(value) => handleFormChange(value, 'legalDescription')}
           />
           <FormField
-            title="Property ID"
+            title="Country ID"
             value={form.propertyId}
-            placeholder="Enter property ID..."
+            placeholder="Enter Country ID..."
             iconName="identifier"
             onChangeText={(value) => handleFormChange(value, 'propertyId')}
           />
