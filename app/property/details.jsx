@@ -58,20 +58,62 @@ const generateMonthlyData = (ethPrice, multipliers) => {
     const finalMultiplier = multipliers[2];
     const data = [];
 
-    // Different volatility patterns based on ETH amount
-    const volatility = ethPrice <= 1 ? 0.02 :
-        ethPrice <= 5 ? 0.03 :
-            ethPrice <= 10 ? 0.04 :
-                ethPrice <= 25 ? 0.05 : 0.06;
+    // Different patterns based on ETH amount
+    const pattern = ethPrice <= 1 ? {
+        // Conservative pattern: Small steady growth with minor fluctuations
+        trend: 0.008,
+        volatility: 0.02,
+        cycleAmplitude: 0.01,
+        cycleLength: 3
+    } : ethPrice <= 5 ? {
+        // Moderate pattern: More volatility, clear growth cycles
+        trend: 0.015,
+        volatility: 0.04,
+        cycleAmplitude: 0.03,
+        cycleLength: 4
+    } : ethPrice <= 10 ? {
+        // Aggressive pattern: High volatility, strong growth cycles
+        trend: 0.025,
+        volatility: 0.06,
+        cycleAmplitude: 0.05,
+        cycleLength: 6
+    } : ethPrice <= 25 ? {
+        // Very aggressive pattern: Very high volatility, pronounced cycles
+        trend: 0.035,
+        volatility: 0.08,
+        cycleAmplitude: 0.07,
+        cycleLength: 4
+    } : {
+        // Premium pattern: Extreme volatility, complex cycles
+        trend: 0.045,
+        volatility: 0.1,
+        cycleAmplitude: 0.09,
+        cycleLength: 3
+    };
+
+    let currentValue = ethPrice;
 
     for (let i = 0; i <= monthlyPoints; i++) {
-        const progress = i / monthlyPoints;
-        const baseGrowth = 1 + (finalMultiplier - 1) * progress;
+        // Base trend
+        const trendGrowth = 1 + pattern.trend;
 
-        // Add controlled randomness based on ETH amount
-        const variation = 1 + (Math.random() - 0.5) * volatility;
-        const value = ethPrice * baseGrowth * variation;
-        data.push(Math.round(value * ETH_TO_PKR));
+        // Market cycles (sine wave pattern)
+        const cycleEffect = 1 + pattern.cycleAmplitude *
+            Math.sin((i / pattern.cycleLength) * Math.PI);
+
+        // Random volatility
+        const randomFactor = 1 + (Math.random() - 0.5) * pattern.volatility;
+
+        // Combine all factors
+        currentValue = currentValue * trendGrowth * cycleEffect * randomFactor;
+
+        // Ensure we reach approximate target by end of period
+        if (i === monthlyPoints) {
+            currentValue = ethPrice * finalMultiplier;
+        }
+
+        // Convert to PKR and add to data
+        data.push(Math.round(currentValue * ETH_TO_PKR));
     }
 
     return data;
