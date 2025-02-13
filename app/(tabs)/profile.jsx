@@ -17,30 +17,34 @@ const PropertyCard = ({ item }) => (
     animation="fadeInUp"
     className="mx-4 mb-6"
   >
-    <LinearGradient
-      colors={['rgba(175, 103, 219, 0.1)', 'rgba(25, 77, 181, 0.1)']}
-      className="rounded-2xl p-4"
+    <TouchableOpacity
+      onPress={() => router.push(`/property/details?id=${item._id}`)}
     >
-      <View className="flex-row">
-        <Image
-          source={{ uri: item.images[0] || 'https://via.placeholder.com/400x300?text=No+Image' }}
-          className="w-20 h-20 rounded-xl"
-          resizeMode="cover"
-        />
-        <View className="flex-1 ml-4">
-          <Text className="text-white font-psemibold text-lg">{item.title}</Text>
-          <Text className="text-gray-100 font-pregular mt-1">Price: {item.price} ETH</Text>
-          <View className="flex-row justify-between items-center mt-2">
-            <Text className="text-secondary font-pmedium">{item.propertyType}</Text>
-            <View className={`px-3 py-1 rounded-full ${item.isTokenized ? 'bg-green-500/20' : 'bg-yellow-500/20'}`}>
-              <Text className={`font-pbold ${item.isTokenized ? 'text-green-500' : 'text-yellow-500'}`}>
-                {item.isTokenized ? 'Tokenized' : item.status}
-              </Text>
+      <LinearGradient
+        colors={['rgba(175, 103, 219, 0.1)', 'rgba(25, 77, 181, 0.1)']}
+        className="rounded-2xl p-4"
+      >
+        <View className="flex-row">
+          <Image
+            source={{ uri: item.images[0] || 'https://via.placeholder.com/400x300?text=No+Image' }}
+            className="w-20 h-20 rounded-xl"
+            resizeMode="cover"
+          />
+          <View className="flex-1 ml-4">
+            <Text className="text-white font-psemibold text-lg">{item.title}</Text>
+            <Text className="text-gray-100 font-pregular mt-1">Price: {item.price} ETH</Text>
+            <View className="flex-row justify-between items-center mt-2">
+              <Text className="text-secondary font-pmedium">{item.propertyType}</Text>
+              <View className={`px-3 py-1 rounded-full ${item.isTokenized ? 'bg-green-500/20' : 'bg-yellow-500/20'}`}>
+                <Text className={`font-pbold ${item.isTokenized ? 'text-green-500' : 'text-yellow-500'}`}>
+                  {item.isTokenized ? 'Tokenized' : item.status}
+                </Text>
+              </View>
             </View>
           </View>
         </View>
-      </View>
-    </LinearGradient>
+      </LinearGradient>
+    </TouchableOpacity>
   </Animatable.View>
 );
 
