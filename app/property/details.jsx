@@ -13,6 +13,70 @@ import { BASE_URL } from '../../lib/api';
 import { useGlobalContext } from '../../context/GlobalProvider';
 import propertyAPI from '../../lib/propertyApi';
 
+// ============ Constants ============
+const ETH_TO_PKR = 746929; // 1 ETH = 746,929 PKR
+const ETH_TO_USD = 3000; // 1 ETH = $3,000 USD
+
+// Price formatter functions
+const formatPKR = (amount) => {
+    return new Intl.NumberFormat('en-PK', {
+        style: 'currency',
+        currency: 'PKR',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    }).format(amount);
+};
+
+const formatUSD = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    }).format(amount);
+};
+
+// ============ Price Prediction Logic ============
+const getMultipliers = (eth) => {
+    if (eth <= 1) {
+        return [1, 1.15, 1.32]; // 15% yearly growth
+    } else if (eth <= 5) {
+        return [1, 1.25, 1.56]; // 25% yearly growth
+    } else if (eth <= 10) {
+        return [1, 1.35, 1.82]; // 35% yearly growth
+    } else {
+        return [1, 1.45, 2.10]; // 45% yearly growth
+    }
+};
+
+const getPricePrediction = (ethPrice) => {
+    const multipliers = getMultipliers(ethPrice);
+    const currentYear = new Date().getFullYear();
+
+    // Convert ETH prices to PKR
+    const pricesInPKR = multipliers.map(m => (ethPrice * m * ETH_TO_PKR));
+
+    return {
+        labels: Array.from({ length: 3 }, (_, i) => (currentYear + i).toString()),
+        datasets: [{
+            data: pricesInPKR,
+            color: (opacity = 1) => `rgba(175, 103, 219, ${opacity})`, // Purple color
+            strokeWidth: 2
+        }]
+    };
+};
+
+const formatLargeNumber = (num) => {
+    if (num >= 10000000) { // 10 million or more
+        return `${(num / 10000000).toFixed(1)}Cr`;
+    } else if (num >= 100000) { // 100k or more
+        return `${(num / 100000).toFixed(1)}L`;
+    } else if (num >= 1000) {
+        return `${(num / 1000).toFixed(1)}K`;
+    }
+    return num.toString();
+};
+
 // ============ Components ============
 
 const ImageCarousel = ({ images = [] }) => {
@@ -52,40 +116,118 @@ const ImageCarousel = ({ images = [] }) => {
 };
 
 const PriceChart = ({ propertyId, basePrice = 0 }) => {
-    // Generate random price predictions for next 5 years
-    const currentYear = new Date().getFullYear();
-    const data = {
-        labels: Array.from({ length: 6 }, (_, i) => (currentYear + i).toString()),
-        datasets: [{
-            data: Array.from({ length: 6 }, (_, i) =>
-                basePrice * (1 + (Math.random() * 0.4 + 0.1) * i) // Random increase 10-50% each year
-            )
-        }]
-    };
+    const data = getPricePrediction(basePrice);
+    const multipliers = getMultipliers(basePrice);
+    const finalPriceETH = basePrice * multipliers[2];
+    const initialPricePKR = basePrice * ETH_TO_PKR;
+    const finalPricePKR = finalPriceETH * ETH_TO_PKR;
+
+    // Calculate min and max for better graph scaling
+    const maxValue = Math.max(...data.datasets[0].data);
+    const minValue = Math.min(...data.datasets[0].data);
+    const valueRange = maxValue - minValue;
+    const yAxisMin = Math.max(0, minValue - valueRange * 0.1);
+    const yAxisMax = maxValue + valueRange * 0.1;
 
     return (
         <View className="mt-6">
-            <Text className="text-white font-psemibold text-lg mb-4">Price Prediction (5 Years)</Text>
-            <LineChart
-                data={data}
-                width={Dimensions.get('window').width - 32}
-                height={220}
-                chartConfig={{
-                    backgroundColor: '#1a1a1a',
-                    backgroundGradientFrom: '#1a1a1a',
-                    backgroundGradientTo: '#1a1a1a',
-                    decimalPlaces: 2,
-                    color: (opacity = 1) => `rgba(175, 103, 219, ${opacity})`,
-                    style: {
+            <Text className="text-white font-psemibold text-lg mb-4">Price Prediction (2 Years)</Text>
+            <View className="bg-[#1a1a1a] p-4 rounded-xl">
+                <LineChart
+                    data={data}
+                    width={Dimensions.get('window').width - 64}
+                    height={220}
+                    chartConfig={{
+                        backgroundColor: '#1a1a1a',
+                        backgroundGradientFrom: '#1a1a1a',
+                        backgroundGradientTo: '#1a1a1a',
+                        decimalPlaces: 0,
+                        color: (opacity = 1) => `rgba(175, 103, 219, ${opacity})`,
+                        labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+                        propsForDots: {
+                            r: "6",
+                            strokeWidth: "2",
+                            stroke: "#af67db"
+                        },
+                        propsForBackgroundLines: {
+                            strokeDasharray: "", // Solid lines
+                            stroke: "rgba(255,255,255,0.1)",
+                            strokeWidth: 1
+                        },
+                        formatYLabel: (value) => formatLargeNumber(value)
+                    }}
+                    bezier
+                    style={{
+                        marginVertical: 8,
                         borderRadius: 16
-                    }
-                }}
-                bezier
-                style={{
-                    marginVertical: 8,
-                    borderRadius: 16
-                }}
-            />
+                    }}
+                    withVerticalLines={false}
+                    withHorizontalLines={true}
+                    withVerticalLabels={true}
+                    withHorizontalLabels={true}
+                    fromZero={false}
+                    segments={5}
+                    yAxisInterval={4}
+                    yAxisSuffix=""
+                    yAxisLabel="Rs. "
+                />
+            </View>
+
+            <View className="mt-4 bg-black-100/50 p-4 rounded-xl">
+                <Text className="text-white font-psemibold mb-4">Predicted Returns</Text>
+
+                {/* Initial Investment */}
+                <View className="mb-4 border-b border-gray-800 pb-4">
+                    <Text className="text-gray-300 mb-2">Initial Investment</Text>
+                    <View className="flex-row justify-between">
+                        <Text className="text-white">{basePrice} ETH</Text>
+                        <Text className="text-white">{formatPKR(initialPricePKR)}</Text>
+                    </View>
+                </View>
+
+                {/* Year 1 Projection */}
+                <View className="mb-4 border-b border-gray-800 pb-4">
+                    <Text className="text-gray-300 mb-2">Year 1 Projection</Text>
+                    <View className="flex-row justify-between">
+                        <Text className="text-green-500">
+                            {(basePrice * multipliers[1]).toFixed(2)} ETH
+                        </Text>
+                        <Text className="text-green-500">
+                            {formatPKR(basePrice * multipliers[1] * ETH_TO_PKR)}
+                        </Text>
+                    </View>
+                </View>
+
+                {/* Year 2 Projection */}
+                <View className="mb-4 border-b border-gray-800 pb-4">
+                    <Text className="text-gray-300 mb-2">Year 2 Projection</Text>
+                    <View className="flex-row justify-between">
+                        <Text className="text-green-500">{finalPriceETH.toFixed(2)} ETH</Text>
+                        <Text className="text-green-500">{formatPKR(finalPricePKR)}</Text>
+                    </View>
+                </View>
+
+                {/* Potential Returns */}
+                <View>
+                    <Text className="text-gray-300 mb-2">Total Returns (2 Years)</Text>
+                    <View className="flex-row justify-between">
+                        <View>
+                            <Text className="text-green-500">
+                                +{(finalPriceETH - basePrice).toFixed(2)} ETH
+                            </Text>
+                            <Text className="text-gray-300 text-sm">
+                                {((finalPriceETH - basePrice) * 100 / basePrice).toFixed(1)}% Growth
+                            </Text>
+                        </View>
+                        <View className="items-end">
+                            <Text className="text-green-500">
+                                {formatPKR(finalPricePKR - initialPricePKR)}
+                            </Text>
+                            <Text className="text-gray-300 text-sm">Total Profit</Text>
+                        </View>
+                    </View>
+                </View>
+            </View>
         </View>
     );
 };
@@ -287,8 +429,18 @@ const PropertyDetails = () => {
                 <View className="p-4">
                     <Animatable.View animation="fadeInUp" delay={300}>
                         <Text className="text-white font-psemibold text-2xl">{property.title}</Text>
-                        <Text className="text-secondary font-pmedium text-lg mt-2">{property.price} ETH</Text>
-                        <Text className="text-gray-300 mt-1">{property.address}</Text>
+                        <View className="mt-2">
+                            <Text className="text-secondary font-pmedium text-lg">
+                                {property.price} ETH
+                            </Text>
+                            <Text className="text-gray-300 text-sm">
+                                {formatPKR(property.price * ETH_TO_PKR)} PKR
+                            </Text>
+                            <Text className="text-gray-300 text-sm">
+                                {formatUSD(property.price * ETH_TO_USD)} USD
+                            </Text>
+                        </View>
+                        <Text className="text-gray-300 mt-2">{property.address}</Text>
 
                         {/* Status Badge */}
                         <View className="flex-row mt-2">
