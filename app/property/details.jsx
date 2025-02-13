@@ -218,26 +218,32 @@ const PropertyDetails = () => {
 
             const response = await propertyAPI.transferProperty(params.id, transferData, token);
 
-            if (response.success) {
-                setProperty(prev => ({
-                    ...prev,
-                    owner: {
-                        ...prev.owner,
-                        id: transferData.toUserId
-                    },
-                    lastTransferPrice: transferData.price,
-                    lastTransferDate: new Date().toISOString()
-                }));
-                return response;
-            } else {
-                throw new Error(response.message || 'Transfer failed');
-            }
+            // Update property state with transfer data
+            // Since 201 status means success, we don't need to check response.success
+            setProperty(prev => ({
+                ...prev,
+                owner: {
+                    ...prev.owner,
+                    id: transferData.toUserId
+                },
+                lastTransferPrice: transferData.price,
+                lastTransferDate: new Date().toISOString()
+            }));
+
+            // Show success message
+            Alert.alert(
+                "Success",
+                "Property transferred successfully!",
+                [{ text: "OK" }]
+            );
+
+            return response;
         } catch (error) {
             console.error('Transfer error:', error);
             if (error.response?.status === 403) {
                 await handleAuthError();
             }
-            throw error;
+            throw new Error(error.response?.data?.message || 'Transfer failed');
         }
     };
 

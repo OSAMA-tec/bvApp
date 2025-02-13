@@ -3,6 +3,7 @@ import { Link, router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { View, Text, ScrollView, Dimensions, Alert, Image } from "react-native";
 import * as Animatable from "react-native-animatable";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { images } from "../../constants";
 import { CustomButton, FormField } from "../../components";
@@ -13,7 +14,7 @@ const SignUp = () => {
   const { setUser } = useGlobalContext();
   const [isSubmitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
-    fullname: "",
+    name: "",
     email: "",
     password: "",
   });
@@ -30,7 +31,7 @@ const SignUp = () => {
   const submit = async () => {
     // Validate required fields
     const requiredFields = {
-      fullname: 'Full Name',
+      name: 'Full Name',
       email: 'Email',
       password: 'Password'
     };
@@ -61,23 +62,27 @@ const SignUp = () => {
         throw new Error('Password must be at least 8 characters long');
       }
 
-      // Here you would typically call your registration API
       const response = await authAPI.register({
-        fullName: form.fullname.trim(),
+        name: form.name.trim(),
         email: form.email.trim().toLowerCase(),
         password: form.password
       });
 
-      if (response.success) {
-        setUser({
-          email: form.email,
-          name: form.fullname
-        });
+      // Store user data and token
+      if (response.user && response.token) {
+        await AsyncStorage.setItem('token', response.token);
+        setUser(response.user);
 
+        // Navigate to verify-email page
         router.push({
           pathname: "/verify-email",
-          params: { email: form.email }
+          params: {
+            email: response.user.email,
+            token: response.token
+          }
         });
+      } else {
+        throw new Error('Invalid response from server');
       }
     } catch (error) {
       const errorMessage = error.message || "Registration failed. Please try again.";
@@ -143,11 +148,11 @@ const SignUp = () => {
           >
             <FormField
               title="Full Name"
-              value={form.fullname}
+              value={form.name}
               placeholder="Enter your full name"
               iconName="account-outline"
               required
-              onChangeText={(value) => handleFormChange(value, 'fullname')}
+              onChangeText={(value) => handleFormChange(value, 'name')}
               autoCapitalize="words"
             />
 

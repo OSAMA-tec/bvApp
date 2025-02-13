@@ -3,17 +3,25 @@ import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { View, Text, ScrollView, Dimensions, Alert } from "react-native";
 import * as Animatable from "react-native-animatable";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { CustomButton, FormField } from "../../components";
 import { useGlobalContext } from "../../context/GlobalProvider";
 import { authAPI } from "../../lib/api";
 
 const VerifyEmail = () => {
-    const { email } = useLocalSearchParams();
+    const { email, token } = useLocalSearchParams();
     const { setUser, setIsLogged } = useGlobalContext();
     const [isSubmitting, setSubmitting] = useState(false);
     const [code, setCode] = useState("");
     const [timer, setTimer] = useState(600); // 10 minutes in seconds
+
+    useEffect(() => {
+        if (!email || !token) {
+            Alert.alert("Error", "Invalid verification session");
+            router.replace("/sign-in");
+        }
+    }, [email, token]);
 
     useEffect(() => {
         if (timer > 0) {
@@ -51,19 +59,32 @@ const VerifyEmail = () => {
 
         try {
             setSubmitting(true);
-            const response = await authAPI.verifyEmail({ email, code });
+            const response = await authAPI.verifyEmail({
+                email,
+                code,
+                token
+            });
+
             if (response.success) {
-                Alert.alert("Success", "Email verified successfully", [
-                    {
-                        text: "Continue to Login",
-                        onPress: () => {
-                            router.replace("/sign-in");
-                        },
-                    },
-                ]);
+                // Clear stored data
+                await AsyncStorage.removeItem('token');
+                setUser(null);
+                setIsLogged(false);
+
+                Alert.alert(
+                    "Success",
+                    "Email verified successfully! Please login to continue.",
+                    [
+                        {
+                            text: "Login",
+                            onPress: () => router.replace("/sign-in")
+                        }
+                    ]
+                );
             }
         } catch (error) {
-            Alert.alert("Error", error.message || "Failed to verify email");
+            const errorMessage = error.message || "Failed to verify email";
+            Alert.alert("Error", errorMessage);
         } finally {
             setSubmitting(false);
         }
@@ -112,10 +133,14 @@ const VerifyEmail = () => {
                         <FormField
                             title="Verification Code"
                             value={code}
-                            handleChangeText={(e) => setCode(e.toUpperCase())}
-                            otherStyles="mt-7"
+                            placeholder="Enter 6-digit code"
+                            iconName="shield-check-outline"
+                            required
+                            onChangeText={(value) => setCode(value.toUpperCase())}
+                            keyboardType="number-pad"
                             maxLength={6}
                             autoCapitalize="characters"
+                            otherStyles="mt-7"
                         />
                     </Animatable.View>
 
@@ -132,7 +157,7 @@ const VerifyEmail = () => {
                         />
 
                         <CustomButton
-                            title="Resend Code"
+                            title={timer > 0 ? `Resend Code (${formatTime(timer)})` : "Resend Code"}
                             handlePress={handleResend}
                             containerStyles="mt-4"
                             isDisabled={timer > 0}
