@@ -147,14 +147,23 @@ const NFTDetailsModal = ({ visible, onClose, ...props }) => {
 const NFTCard = (props) => {
     const [showDetails, setShowDetails] = useState(false);
 
-    // Format price to ETH (dummy conversion for now)
+    // Format price to ETH (using actual price)
     const formatPriceToEth = (price) => {
-        return `${(price * 0.0005).toFixed(2)} ETH`;
+        if (!price) return '0 ETH';
+        return `${price} ETH`;
     };
 
-    // Format price to USD (dummy conversion for now)
+    // Format price to USD (using actual price with ETH current rate)
     const formatPriceToUSD = (price) => {
-        return `$${(price * 1700).toFixed(2)}`;
+        if (!price) return '$0';
+        // Using current ETH price of approximately $3000 USD
+        const usdPrice = price * 3000;
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        }).format(usdPrice);
     };
 
     // Format coordinates to location string
