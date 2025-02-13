@@ -38,29 +38,71 @@ const formatUSD = (amount) => {
 
 // ============ Price Prediction Logic ============
 const getMultipliers = (eth) => {
+    // Different growth patterns based on ETH ranges
     if (eth <= 1) {
-        return [1, 1.15, 1.32]; // 15% yearly growth
+        return [1, 1.12, 1.25]; // Conservative growth for small investments
     } else if (eth <= 5) {
-        return [1, 1.25, 1.56]; // 25% yearly growth
+        return [1, 1.28, 1.65]; // Moderate growth for medium investments
     } else if (eth <= 10) {
-        return [1, 1.35, 1.82]; // 35% yearly growth
+        return [1, 1.45, 2.10]; // Aggressive growth for larger investments
+    } else if (eth <= 25) {
+        return [1, 1.60, 2.56]; // Very aggressive growth for substantial investments
     } else {
-        return [1, 1.45, 2.10]; // 45% yearly growth
+        return [1, 1.75, 3.06]; // Premium growth for major investments
     }
+};
+
+// Generate monthly variations for more realistic graph patterns
+const generateMonthlyData = (ethPrice, multipliers) => {
+    const monthlyPoints = 24; // 2 years * 12 months
+    const finalMultiplier = multipliers[2];
+    const data = [];
+
+    // Different volatility patterns based on ETH amount
+    const volatility = ethPrice <= 1 ? 0.02 :
+        ethPrice <= 5 ? 0.03 :
+            ethPrice <= 10 ? 0.04 :
+                ethPrice <= 25 ? 0.05 : 0.06;
+
+    for (let i = 0; i <= monthlyPoints; i++) {
+        const progress = i / monthlyPoints;
+        const baseGrowth = 1 + (finalMultiplier - 1) * progress;
+
+        // Add controlled randomness based on ETH amount
+        const variation = 1 + (Math.random() - 0.5) * volatility;
+        const value = ethPrice * baseGrowth * variation;
+        data.push(Math.round(value * ETH_TO_PKR));
+    }
+
+    return data;
 };
 
 const getPricePrediction = (ethPrice) => {
     const multipliers = getMultipliers(ethPrice);
     const currentYear = new Date().getFullYear();
+    const monthlyData = generateMonthlyData(ethPrice, multipliers);
 
-    // Convert ETH prices to PKR
-    const pricesInPKR = multipliers.map(m => (ethPrice * m * ETH_TO_PKR));
+    // Create labels for every 6 months
+    const labels = [];
+    for (let i = 0; i <= 24; i += 6) {
+        const monthsAhead = i;
+        const date = new Date();
+        date.setMonth(date.getMonth() + monthsAhead);
+        labels.push(date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }));
+    }
 
     return {
-        labels: Array.from({ length: 3 }, (_, i) => (currentYear + i).toString()),
+        labels,
         datasets: [{
-            data: pricesInPKR,
-            color: (opacity = 1) => `rgba(175, 103, 219, ${opacity})`, // Purple color
+            data: monthlyData.filter((_, index) => index % 6 === 0), // Sample every 6 months for display
+            color: (opacity = 1) => {
+                // Different colors based on ETH amount
+                if (ethPrice <= 1) return `rgba(75, 192, 192, ${opacity})`; // Teal
+                if (ethPrice <= 5) return `rgba(54, 162, 235, ${opacity})`; // Blue
+                if (ethPrice <= 10) return `rgba(153, 102, 255, ${opacity})`; // Purple
+                if (ethPrice <= 25) return `rgba(255, 159, 64, ${opacity})`; // Orange
+                return `rgba(255, 99, 132, ${opacity})`; // Red
+            },
             strokeWidth: 2
         }]
     };
@@ -142,7 +184,14 @@ const PriceChart = ({ propertyId, basePrice = 0 }) => {
                         backgroundGradientFrom: '#1a1a1a',
                         backgroundGradientTo: '#1a1a1a',
                         decimalPlaces: 0,
-                        color: (opacity = 1) => `rgba(175, 103, 219, ${opacity})`,
+                        color: (opacity = 1) => {
+                            // Different colors based on ETH amount
+                            if (basePrice <= 1) return `rgba(75, 192, 192, ${opacity})`; // Teal
+                            if (basePrice <= 5) return `rgba(54, 162, 235, ${opacity})`; // Blue
+                            if (basePrice <= 10) return `rgba(153, 102, 255, ${opacity})`; // Purple
+                            if (basePrice <= 25) return `rgba(255, 159, 64, ${opacity})`; // Orange
+                            return `rgba(255, 99, 132, ${opacity})`; // Red
+                        },
                         labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
                         propsForDots: {
                             r: "6",
