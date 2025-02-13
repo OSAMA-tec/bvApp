@@ -15,27 +15,47 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as DocumentPicker from "expo-document-picker";
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { FormField, TokenizationModal } from "../../components";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import propertyAPI from "../../lib/propertyApi";
 
 const { width } = Dimensions.get('window');
 
 const Create = () => {
   const initialFormState = {
-    propertytitle: "",
+    // Required Fields
+    title: "",
+    description: "",
+    propertyType: "",
     price: "",
-    location: "",
-    propertytype: "",
+    address: "",
+    coordinates: [],
+
+    // Property Details
+    area: "",
     bedrooms: "",
     bathrooms: "",
-    area: "",
-    description: "",
     amenities: [],
-    returns: "",
+    yearBuilt: "",
+    constructionStatus: "",
+
+    // Blockchain Related
+    isAuctionEnabled: false,
+    minimumBid: "",
+    auctionEndTime: "",
+
+    // Legal Information
+    legalDescription: "",
+    propertyId: "",
+    verificationDocument: "",
+
+    // Files
     images: [],
-    documents: null,
+    documents: []
   };
 
   const [form, setForm] = useState(initialFormState);
   const [showTokenizationModal, setShowTokenizationModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Clear form on component mount
   useEffect(() => {
@@ -56,29 +76,47 @@ const Create = () => {
   };
 
   const openImagePicker = async () => {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ["image/png", "image/jpg"],
-      multiple: true
-    });
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["image/jpeg", "image/png", "image/jpg"],
+        multiple: true,
+        copyToCacheDirectory: true
+      });
 
-    if (!result.canceled) {
-      setForm(prev => ({
-        ...prev,
-        images: [...prev.images, ...result.assets]
-      }));
+      if (!result.canceled && result.assets) {
+        // Check if adding new images would exceed the limit
+        if (form.images.length + result.assets.length > 10) {
+          Alert.alert("Error", "Maximum 10 images allowed");
+          return;
+        }
+
+        setForm(prev => ({
+          ...prev,
+          images: [...prev.images, ...result.assets]
+        }));
+      }
+    } catch (error) {
+      console.error('Image picker error:', error);
+      Alert.alert("Error", "Failed to select images. Please try again.");
     }
   };
 
   const openDocumentPicker = async () => {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ["application/pdf"]
-    });
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf"],
+        copyToCacheDirectory: true
+      });
 
-    if (!result.canceled) {
-      setForm(prev => ({
-        ...prev,
-        documents: result.assets[0]
-      }));
+      if (!result.canceled && result.assets?.[0]) {
+        setForm(prev => ({
+          ...prev,
+          documents: result.assets[0]
+        }));
+      }
+    } catch (error) {
+      console.error('Document picker error:', error);
+      Alert.alert("Error", "Failed to select document. Please try again.");
     }
   };
 
@@ -93,16 +131,141 @@ const Create = () => {
     </Animatable.View>
   );
 
-  const handleSubmit = () => {
-    if (!form.propertytitle || !form.price || !form.location) {
-      return Alert.alert("Error", "Please fill in all required fields");
-    }
-    setShowTokenizationModal(true);
-  };
+  const handleSubmit = async () => {
+    // Validate required fields
+    const requiredFields = {
+      title: 'Property Title',
+      description: 'Description',
+      propertyType: 'Property Type',
+      price: 'Price',
+      address: 'Address',
+      coordinates: 'Coordinates'
+    };
 
-  const handleTokenizationComplete = () => {
-    setShowTokenizationModal(false);
-    router.push("/home");
+    const missingFields = Object.entries(requiredFields)
+      .filter(([key]) => {
+        if (key === 'coordinates') {
+          return !form.coordinates || form.coordinates.length !== 2;
+        }
+        return !form[key];
+      })
+      .map(([_, label]) => label);
+
+    if (missingFields.length > 0) {
+      return Alert.alert(
+        "Required Fields Missing",
+        `Please fill in the following required fields:\n${missingFields.join('\n')}`,
+        [{ text: "OK" }]
+      );
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      // Get token from storage
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication required. Please log in again.');
+      }
+
+      // Format data for API
+      const propertyData = {
+        // Required fields
+        title: form.title.trim(),
+        description: form.description.trim(),
+        propertyType: form.propertyType,
+        price: parseFloat(form.price) || 0,
+        address: form.address.trim(),
+        coordinates: form.coordinates.map(coord => parseFloat(coord) || 0),
+
+        // Property Details (optional)
+        ...(form.area ? { area: parseFloat(form.area) } : {}),
+        ...(form.bedrooms ? { bedrooms: parseInt(form.bedrooms, 10) } : {}),
+        ...(form.bathrooms ? { bathrooms: parseInt(form.bathrooms, 10) } : {}),
+        ...(form.amenities.length > 0 ? { amenities: form.amenities } : {}),
+        ...(form.yearBuilt ? { yearBuilt: parseInt(form.yearBuilt, 10) } : {}),
+        ...(form.constructionStatus ? { constructionStatus: form.constructionStatus } : {}),
+
+        // Blockchain Related (optional)
+        isAuctionEnabled: form.isAuctionEnabled,
+        ...(form.minimumBid ? { minimumBid: parseFloat(form.minimumBid) } : {}),
+        ...(form.auctionEndTime ? { auctionEndTime: form.auctionEndTime } : {}),
+
+        // Legal Information (optional)
+        ...(form.legalDescription ? { legalDescription: form.legalDescription.trim() } : {}),
+        ...(form.propertyId ? { propertyId: form.propertyId.trim() } : {}),
+        ...(form.verificationDocument ? { verificationDocument: form.verificationDocument.trim() } : {}),
+
+        // Files
+        images: form.images,
+        documents: form.documents
+      };
+
+      // Validate numeric fields are non-negative
+      const numericFields = ['price', 'area', 'bedrooms', 'bathrooms', 'minimumBid'];
+      numericFields.forEach(field => {
+        if (propertyData[field] !== undefined && propertyData[field] < 0) {
+          throw new Error(`${field.charAt(0).toUpperCase() + field.slice(1)} must be a positive number.`);
+        }
+      });
+
+      // Validate year built
+      if (propertyData.yearBuilt) {
+        const currentYear = new Date().getFullYear();
+        if (propertyData.yearBuilt < 1800 || propertyData.yearBuilt > currentYear) {
+          throw new Error(`Year built must be between 1800 and ${currentYear}.`);
+        }
+      }
+
+      // Validate coordinates
+      if (propertyData.coordinates.length === 2) {
+        const [longitude, latitude] = propertyData.coordinates;
+        if (longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) {
+          throw new Error('Invalid coordinates. Longitude must be between -180 and 180, and latitude between -90 and 90.');
+        }
+      }
+
+      // Validate files
+      if (propertyData.images?.length > 10) {
+        throw new Error('Maximum 10 images allowed.');
+      }
+      if (propertyData.documents?.length > 5) {
+        throw new Error('Maximum 5 documents allowed.');
+      }
+
+      // Show loading message
+      Alert.alert(
+        "Processing",
+        "Creating your property listing. This may take a few moments...",
+        [{ text: "OK" }]
+      );
+
+      // Create property
+      const response = await propertyAPI.createProperty(propertyData, token);
+
+      Alert.alert(
+        "Success",
+        "Your property has been successfully listed!",
+        [
+          {
+            text: "View Property",
+            onPress: () => router.push(`/property/${response.id}`)
+          },
+          {
+            text: "OK",
+            onPress: () => {
+              resetForm();
+              router.push("/home");
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Property creation error:', error);
+      Alert.alert("Error", error.message || "Failed to create property. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -139,65 +302,117 @@ const Create = () => {
           </LinearGradient>
         </Animatable.View>
 
-        {/* Basic Information */}
+        {/* Basic Information - Required Fields */}
         <View className="mb-8">
-          <SectionHeader title="Basic Information" />
+          <SectionHeader title="Basic Information (Required)" />
           <FormField
             title="Property Title"
-            value={form.propertytitle}
+            value={form.title}
             placeholder="Enter property title..."
             iconName="home-outline"
             required
-            onChangeText={handleFormChange}
+            onChangeText={(value) => handleFormChange(value, 'title')}
+          />
+          <FormField
+            title="Description"
+            value={form.description}
+            placeholder="Enter property description..."
+            iconName="text"
+            type="textarea"
+            required
+            onChangeText={(value) => handleFormChange(value, 'description')}
+          />
+          <FormField
+            title="Property Type"
+            value={form.propertyType}
+            placeholder="Select property type..."
+            iconName="home-city-outline"
+            required
+            type="dropdown"
+            options={[
+              { label: 'Residential', value: 'residential' },
+              { label: 'Commercial', value: 'commercial' },
+              { label: 'Land', value: 'land' }
+            ]}
+            onChangeText={(value) => handleFormChange(value, 'propertyType')}
           />
           <FormField
             title="Price"
             value={form.price}
-            placeholder="Enter price in ETH..."
-            iconName="ethereum"
+            placeholder="Enter price..."
+            iconName="cash"
             keyboardType="numeric"
             required
-            onChangeText={handleFormChange}
+            onChangeText={(value) => handleFormChange(value, 'price')}
           />
           <FormField
-            title="Returns"
-            value={form.returns}
-            placeholder="Expected annual returns..."
-            iconName="chart-line"
-            keyboardType="numeric"
-            onChangeText={handleFormChange}
-          />
-        </View>
-
-        {/* Property Details */}
-        <View className="mb-8">
-          <SectionHeader title="Property Details" delay={200} />
-          <FormField
-            title="Location"
-            value={form.location}
-            placeholder="Property location..."
+            title="Address"
+            value={form.address}
+            placeholder="Enter property address..."
             iconName="map-marker-outline"
             required
-            onChangeText={handleFormChange}
+            onChangeText={(value) => handleFormChange(value, 'address')}
           />
           <View className="flex-row space-x-4">
             <View className="flex-1">
               <FormField
-                title="Area"
-                value={form.area}
-                placeholder="Area in sq ft..."
-                iconName="ruler-square"
+                title="Longitude"
+                value={form.coordinates?.[0]?.toString()}
+                placeholder="Longitude (-180 to 180)..."
+                iconName="longitude"
                 keyboardType="numeric"
-                onChangeText={handleFormChange}
+                required
+                onChangeText={(value) => {
+                  const coords = [...(form.coordinates || [0, 0])];
+                  coords[0] = value ? parseFloat(value) : '';
+                  handleFormChange(coords, 'coordinates');
+                }}
               />
             </View>
             <View className="flex-1">
               <FormField
-                title="Property Type"
-                value={form.propertytype}
-                placeholder="Type..."
-                iconName="home-city-outline"
-                onChangeText={handleFormChange}
+                title="Latitude"
+                value={form.coordinates?.[1]?.toString()}
+                placeholder="Latitude (-90 to 90)..."
+                iconName="latitude"
+                keyboardType="numeric"
+                required
+                onChangeText={(value) => {
+                  const coords = [...(form.coordinates || [0, 0])];
+                  coords[1] = value ? parseFloat(value) : '';
+                  handleFormChange(coords, 'coordinates');
+                }}
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* Property Details - Optional */}
+        <View className="mb-8">
+          <SectionHeader title="Property Details (Optional)" delay={200} />
+          <View className="flex-row space-x-4">
+            <View className="flex-1">
+              <FormField
+                title="Area (sq ft)"
+                value={form.area}
+                placeholder="Area..."
+                iconName="ruler-square"
+                keyboardType="numeric"
+                onChangeText={(value) => handleFormChange(value, 'area')}
+              />
+            </View>
+            <View className="flex-1">
+              <FormField
+                title="Year Built"
+                value={form.yearBuilt?.toString()}
+                placeholder="Year..."
+                iconName="calendar"
+                keyboardType="number-pad"
+                maxLength={4}
+                onChangeText={(value) => {
+                  const numericValue = value.replace(/[^0-9]/g, '');
+                  handleFormChange(numericValue, 'yearBuilt');
+                }}
               />
             </View>
           </View>
@@ -205,29 +420,107 @@ const Create = () => {
             <View className="flex-1">
               <FormField
                 title="Bedrooms"
-                value={form.bedrooms}
-                placeholder="Bedrooms..."
+                value={form.bedrooms?.toString()}
+                placeholder="Number of bedrooms..."
                 iconName="bed-empty"
-                keyboardType="numeric"
-                onChangeText={handleFormChange}
+                keyboardType="number-pad"
+                onChangeText={(value) => handleFormChange(value, 'bedrooms')}
               />
             </View>
             <View className="flex-1">
               <FormField
                 title="Bathrooms"
-                value={form.bathrooms}
-                placeholder="Bathrooms..."
+                value={form.bathrooms?.toString()}
+                placeholder="Number of bathrooms..."
                 iconName="shower"
-                keyboardType="numeric"
-                onChangeText={handleFormChange}
+                keyboardType="number-pad"
+                onChangeText={(value) => handleFormChange(value, 'bathrooms')}
               />
             </View>
           </View>
+          <FormField
+            title="Construction Status"
+            value={form.constructionStatus}
+            placeholder="Select construction status..."
+            iconName="crane"
+            type="dropdown"
+            options={[
+              { label: 'Select status...', value: '' },
+              { label: 'Completed', value: 'completed' },
+              { label: 'Under Construction', value: 'under_construction' },
+              { label: 'Off Plan', value: 'off_plan' }
+            ]}
+            onChangeText={(value) => handleFormChange(value, 'constructionStatus')}
+          />
+        </View>
+
+        {/* Blockchain Details - Optional */}
+        <View className="mb-8">
+          <SectionHeader title="Blockchain Details (Optional)" delay={300} />
+          <View className="flex-row items-center mb-4">
+            <Text className="text-white mr-2">Enable Auction</Text>
+            <TouchableOpacity
+              onPress={() => handleFormChange(!form.isAuctionEnabled, 'isAuctionEnabled')}
+              className={`p-2 rounded-lg ${form.isAuctionEnabled ? 'bg-secondary' : 'bg-gray-600'}`}
+            >
+              <MaterialCommunityIcons
+                name={form.isAuctionEnabled ? "check" : "close"}
+                size={20}
+                color="white"
+              />
+            </TouchableOpacity>
+          </View>
+          {form.isAuctionEnabled && (
+            <>
+              <FormField
+                title="Minimum Bid"
+                value={form.minimumBid}
+                placeholder="Enter minimum bid amount..."
+                iconName="cash-multiple"
+                keyboardType="numeric"
+                onChangeText={(value) => handleFormChange(value, 'minimumBid')}
+              />
+              <FormField
+                title="Auction End Time"
+                value={form.auctionEndTime}
+                placeholder="YYYY-MM-DDTHH:mm:ssZ"
+                iconName="clock-outline"
+                onChangeText={(value) => handleFormChange(value, 'auctionEndTime')}
+              />
+            </>
+          )}
+        </View>
+
+        {/* Legal Information - Optional */}
+        <View className="mb-8">
+          <SectionHeader title="Legal Information (Optional)" delay={400} />
+          <FormField
+            title="Legal Description"
+            value={form.legalDescription}
+            placeholder="Enter legal description..."
+            iconName="file-document-outline"
+            type="textarea"
+            onChangeText={(value) => handleFormChange(value, 'legalDescription')}
+          />
+          <FormField
+            title="Property ID"
+            value={form.propertyId}
+            placeholder="Enter property ID..."
+            iconName="identifier"
+            onChangeText={(value) => handleFormChange(value, 'propertyId')}
+          />
+          <FormField
+            title="Verification Document URL"
+            value={form.verificationDocument}
+            placeholder="Enter verification document URL..."
+            iconName="link-variant"
+            onChangeText={(value) => handleFormChange(value, 'verificationDocument')}
+          />
         </View>
 
         {/* Media Upload */}
         <View className="mb-8">
-          <SectionHeader title="Media & Documents" delay={400} />
+          <SectionHeader title="Media & Documents" delay={500} />
 
           {/* Image Upload */}
           <TouchableOpacity onPress={openImagePicker} className="mb-4">
@@ -338,12 +631,6 @@ const Create = () => {
           </TouchableOpacity>
         </Animatable.View>
       </ScrollView>
-
-      <TokenizationModal
-        visible={showTokenizationModal}
-        onClose={() => setShowTokenizationModal(false)}
-        onComplete={handleTokenizationComplete}
-      />
     </SafeAreaView>
   );
 };

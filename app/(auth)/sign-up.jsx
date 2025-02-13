@@ -7,6 +7,7 @@ import * as Animatable from "react-native-animatable";
 import { images } from "../../constants";
 import { CustomButton, FormField } from "../../components";
 import { useGlobalContext } from "../../context/GlobalProvider";
+import { authAPI } from "../../lib/api";
 
 const SignUp = () => {
   const { setUser } = useGlobalContext();
@@ -27,27 +28,61 @@ const SignUp = () => {
   }, []);
 
   const submit = async () => {
-    if (form.fullname === "" || form.email === "" || form.password === "") {
-      Alert.alert("Error", "Please fill in all fields");
-      return;
+    // Validate required fields
+    const requiredFields = {
+      fullname: 'Full Name',
+      email: 'Email',
+      password: 'Password'
+    };
+
+    const missingFields = Object.entries(requiredFields)
+      .filter(([key]) => !form[key])
+      .map(([_, label]) => label);
+
+    if (missingFields.length > 0) {
+      return Alert.alert(
+        "Required Fields Missing",
+        `Please fill in the following required fields:\n${missingFields.join('\n')}`,
+        [{ text: "OK" }]
+      );
     }
 
     try {
       setSubmitting(true);
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(form.email)) {
+        throw new Error('Please enter a valid email address');
+      }
+
+      // Validate password strength
+      if (form.password.length < 8) {
+        throw new Error('Password must be at least 8 characters long');
+      }
+
       // Here you would typically call your registration API
-      // For now, we'll simulate a successful registration
-      setTimeout(() => {
+      const response = await authAPI.register({
+        fullName: form.fullname.trim(),
+        email: form.email.trim().toLowerCase(),
+        password: form.password
+      });
+
+      if (response.success) {
         setUser({
           email: form.email,
           name: form.fullname
         });
+
         router.push({
           pathname: "/verify-email",
           params: { email: form.email }
         });
-      }, 1000);
+      }
     } catch (error) {
-      Alert.alert("Error", error.message || "Registration failed");
+      const errorMessage = error.message || "Registration failed. Please try again.";
+      console.error('Registration error:', error);
+      Alert.alert("Error", errorMessage);
     } finally {
       setSubmitting(false);
     }
@@ -112,7 +147,7 @@ const SignUp = () => {
               placeholder="Enter your full name"
               iconName="account-outline"
               required
-              onChangeText={handleFormChange}
+              onChangeText={(value) => handleFormChange(value, 'fullname')}
               autoCapitalize="words"
             />
 
@@ -123,7 +158,7 @@ const SignUp = () => {
               iconName="email-outline"
               keyboardType="email-address"
               required
-              onChangeText={handleFormChange}
+              onChangeText={(value) => handleFormChange(value, 'email')}
               autoCapitalize="none"
             />
 
@@ -134,7 +169,7 @@ const SignUp = () => {
               iconName="lock-outline"
               secureTextEntry
               required
-              onChangeText={handleFormChange}
+              onChangeText={(value) => handleFormChange(value, 'password')}
             />
           </Animatable.View>
 

@@ -28,15 +28,35 @@ const SignIn = () => {
   }, []);
 
   const submit = async () => {
-    if (form.email === "" || form.password === "") {
-      Alert.alert("Error", "Please fill in all fields");
-      return;
+    // Validate required fields
+    const requiredFields = {
+      email: 'Email',
+      password: 'Password'
+    };
+
+    const missingFields = Object.entries(requiredFields)
+      .filter(([key]) => !form[key])
+      .map(([_, label]) => label);
+
+    if (missingFields.length > 0) {
+      return Alert.alert(
+        "Required Fields Missing",
+        `Please fill in the following required fields:\n${missingFields.join('\n')}`,
+        [{ text: "OK" }]
+      );
     }
 
     try {
       setSubmitting(true);
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(form.email)) {
+        throw new Error('Please enter a valid email address');
+      }
+
       const response = await authAPI.login({
-        email: form.email,
+        email: form.email.trim().toLowerCase(),
         password: form.password
       });
 
@@ -48,7 +68,9 @@ const SignIn = () => {
       setIsLogged(true);
       router.replace("/home");
     } catch (error) {
-      Alert.alert("Error", error.message || "Login failed");
+      const errorMessage = error.message || "Login failed. Please check your credentials and try again.";
+      console.error('Login error:', error);
+      Alert.alert("Error", errorMessage);
     } finally {
       setSubmitting(false);
     }
@@ -114,7 +136,7 @@ const SignIn = () => {
               iconName="email-outline"
               keyboardType="email-address"
               required
-              onChangeText={handleFormChange}
+              onChangeText={(value) => handleFormChange(value, 'email')}
               autoCapitalize="none"
             />
 
@@ -125,7 +147,7 @@ const SignIn = () => {
               iconName="lock-outline"
               secureTextEntry
               required
-              onChangeText={handleFormChange}
+              onChangeText={(value) => handleFormChange(value, 'password')}
             />
           </Animatable.View>
 
