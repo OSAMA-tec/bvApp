@@ -1,16 +1,21 @@
 import { useState, useEffect } from 'react';
-import { View, Text, Image, ScrollView, TouchableOpacity, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, Image, ScrollView, TouchableOpacity, Dimensions, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import * as Animatable from 'react-native-animatable';
 import { LineChart } from 'react-native-chart-kit';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { TokenizationModal } from '../../components';
+import { TokenizationModal, TransferModal } from '../../components';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
+import { BASE_URL } from '../../lib/api';
+import { useGlobalContext } from '../../context/GlobalProvider';
+import propertyAPI from '../../lib/propertyApi';
 
 // ============ Components ============
 
-const ImageCarousel = ({ images }) => {
+const ImageCarousel = ({ images = [] }) => {
     const [activeIndex, setActiveIndex] = useState(0);
     const screenWidth = Dimensions.get('window').width;
 
@@ -46,7 +51,7 @@ const ImageCarousel = ({ images }) => {
     );
 };
 
-const PriceChart = ({ propertyId, basePrice }) => {
+const PriceChart = ({ propertyId, basePrice = 0 }) => {
     // Generate random price predictions for next 5 years
     const currentYear = new Date().getFullYear();
     const data = {
@@ -87,53 +92,173 @@ const PriceChart = ({ propertyId, basePrice }) => {
 
 const PropertyDetails = () => {
     const params = useLocalSearchParams();
+    const { logout } = useGlobalContext();
     const [property, setProperty] = useState(null);
     const [loading, setLoading] = useState(true);
     const [showTokenizationModal, setShowTokenizationModal] = useState(false);
+    const [showTransferModal, setShowTransferModal] = useState(false);
+    const [tokenizationStatus, setTokenizationStatus] = useState('pending');
+    const [authToken, setAuthToken] = useState(null);
+    const [error, setError] = useState(null);
+
+    const handleAuthError = async () => {
+        await AsyncStorage.removeItem('token');
+        await logout();
+        router.replace('/sign-in');
+    };
 
     useEffect(() => {
-        // In a real app, fetch property details here using params.id
-        // For now, using mock data
-        setProperty({
-            location: {
-                type: "Point",
-                coordinates: [63, 65]
-            },
-            _id: params.id,
-            owner: {
-                name: "hashmiosama",
-                email: "hashmi.osama555@gmail.com"
-            },
-            title: "Gulberg Property",
-            description: "Luxurious property in prime location",
-            price: 1,
-            address: "bahria phase 7",
-            propertyType: "commercial",
-            images: [
-                "https://res.cloudinary.com/ddfvcbegf/image/upload/v1739456090/properties/images/nzg5i0nbfa5zxjsnmqsd.png"
-            ],
-            isTokenized: false,
-            status: "pending",
-            currentBid: 0,
-            isAuctionEnabled: true,
-            area: 35000,
-            bedrooms: 6,
-            bathrooms: 4,
-            views: 0,
-            amenities: [],
-            yearBuilt: 2024,
-            constructionStatus: "completed",
-            legalDescription: "this is legal document",
-            propertyId: "25636854569",
-            isVerified: false
-        });
-        setLoading(false);
+        const initializeData = async () => {
+            try {
+                const token = await AsyncStorage.getItem('token');
+                console.log('Token from storage:', token ? 'Present' : 'Missing');
+
+                if (!token) {
+                    throw new Error('Authentication required');
+                }
+
+                // Validate token format
+                if (!token.startsWith('Bearer ')) {
+                    console.log('Adding Bearer prefix to token');
+                    setAuthToken(`${token}`);
+                } else {
+                    setAuthToken(token);
+                }
+
+                console.log('Property ID:', params.id);
+                const propertyData = await propertyAPI.getPropertyById(params.id, token);
+
+                if (propertyData) {
+                    console.log('Property data received:', {
+                        id: propertyData._id,
+                        title: propertyData.title,
+                        owner: propertyData.owner
+                    });
+                    setProperty(propertyData);
+                } else {
+                    throw new Error('Property not found');
+                }
+            } catch (error) {
+                console.error('Error initializing:', {
+                    message: error.message,
+                    status: error.response?.status,
+                    data: error.response?.data
+                });
+
+                if (error.response?.status === 403) {
+                    console.log('Handling 403 error - checking token validity');
+                    await handleAuthError();
+                } else if (error.response?.status === 401) {
+                    console.log('Handling 401 error - unauthorized');
+                    await handleAuthError();
+                }
+
+                setError(error.response?.data?.message || error.message || 'Failed to load property details');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        initializeData();
     }, [params.id]);
+
+    const handleTokenizationComplete = async (tokenData) => {
+        try {
+            if (!authToken) {
+                throw new Error('Authentication required');
+            }
+
+            const response = await propertyAPI.tokenizeProperty(params.id, {
+                tokenId: tokenData.tokenId,
+                contractAddress: tokenData.contractAddress,
+                tokenURI: tokenData.tokenURI,
+                transactionHash: tokenData.transactionHash
+            }, authToken);
+
+            // Update property state with tokenization data
+            setProperty(prev => ({
+                ...prev,
+                isTokenized: true,
+                status: 'tokenized',
+                tokenId: tokenData.tokenId,
+                contractAddress: tokenData.contractAddress,
+                tokenURI: tokenData.tokenURI,
+                transactionHash: tokenData.transactionHash
+            }));
+
+            setTokenizationStatus('completed');
+            setShowTokenizationModal(false);
+
+            // Show success message
+            Alert.alert(
+                "Success",
+                "Property tokenized successfully!",
+                [{ text: "OK" }]
+            );
+        } catch (error) {
+            console.error('Tokenization error:', error);
+            if (error.response?.status === 403) {
+                await handleAuthError();
+            }
+            setTokenizationStatus('failed');
+            Alert.alert(
+                "Error",
+                error.message || "Failed to tokenize property"
+            );
+            throw error;
+        }
+    };
+
+    const handleTransferComplete = async (transferData) => {
+        const token = await AsyncStorage.getItem('token');
+        try {
+            if (!authToken) {
+                throw new Error('Authentication required');
+            }
+
+            const response = await propertyAPI.transferProperty(params.id, transferData, token);
+
+            if (response.success) {
+                setProperty(prev => ({
+                    ...prev,
+                    owner: {
+                        ...prev.owner,
+                        id: transferData.toUserId
+                    },
+                    lastTransferPrice: transferData.price,
+                    lastTransferDate: new Date().toISOString()
+                }));
+                return response;
+            } else {
+                throw new Error(response.message || 'Transfer failed');
+            }
+        } catch (error) {
+            console.error('Transfer error:', error);
+            if (error.response?.status === 403) {
+                await handleAuthError();
+            }
+            throw error;
+        }
+    };
 
     if (loading) {
         return (
             <SafeAreaView className="flex-1 bg-primary justify-center items-center">
                 <ActivityIndicator size="large" color="#af67db" />
+            </SafeAreaView>
+        );
+    }
+
+    if (error) {
+        return (
+            <SafeAreaView className="flex-1 bg-primary justify-center items-center">
+                <Text className="text-white text-lg">{error}</Text>
+                <TouchableOpacity
+                    onPress={() => router.back()}
+                    className="mt-4 bg-secondary px-6 py-3 rounded-xl"
+                >
+                    <Text className="text-white font-pbold">Go Back</Text>
+                </TouchableOpacity>
             </SafeAreaView>
         );
     }
@@ -249,26 +374,52 @@ const PropertyDetails = () => {
                         <View className="flex-row justify-between">
                             <TouchableOpacity
                                 className="flex-1 mr-2"
-                                onPress={() => setShowTokenizationModal(true)}
+                                onPress={() => {
+                                    if (!property.isTokenized) {
+                                        setShowTokenizationModal(true);
+                                    }
+                                }}
+                                disabled={property.isTokenized}
                             >
                                 <LinearGradient
-                                    colors={['#af67db', '#194db5']}
+                                    colors={property.isTokenized ? ['#4CAF50', '#45a049'] : ['#af67db', '#194db5']}
                                     className="py-4 px-6 rounded-xl"
                                 >
-                                    <Text className="text-white font-pbold text-center">Tokenize Property</Text>
+                                    <Text className="text-white font-pbold text-center">
+                                        {property.isTokenized ? 'Already Tokenized' : 'Tokenize Property'}
+                                    </Text>
                                 </LinearGradient>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 className="flex-1 ml-2"
                                 onPress={() => {
-                                    // Handle transfer
+                                    if (property.isTokenized) {
+                                        setShowTransferModal(true);
+                                    } else {
+                                        Alert.alert(
+                                            "Property Not Tokenized",
+                                            "Please tokenize the property before transferring.",
+                                            [
+                                                {
+                                                    text: "Tokenize Now",
+                                                    onPress: () => setShowTokenizationModal(true)
+                                                },
+                                                {
+                                                    text: "Cancel",
+                                                    style: "cancel"
+                                                }
+                                            ]
+                                        );
+                                    }
                                 }}
                             >
                                 <LinearGradient
-                                    colors={['#194db5', '#af67db']}
-                                    className="py-4 px-6 rounded-xl"
+                                    colors={property.isTokenized ? ['#194db5', '#af67db'] : ['#666', '#444']}
+                                    className={`py-4 px-6 rounded-xl ${!property.isTokenized ? 'opacity-70' : ''}`}
                                 >
-                                    <Text className="text-white font-pbold text-center">Transfer Property</Text>
+                                    <Text className="text-white font-pbold text-center">
+                                        {property.isTokenized ? 'Transfer Property' : 'Tokenize First'}
+                                    </Text>
                                 </LinearGradient>
                             </TouchableOpacity>
                         </View>
@@ -280,10 +431,27 @@ const PropertyDetails = () => {
             <TokenizationModal
                 visible={showTokenizationModal}
                 onClose={() => setShowTokenizationModal(false)}
-                onComplete={() => {
-                    setShowTokenizationModal(false);
-                    // Refresh property details
+                onComplete={(tokenData) => {
+                    handleTokenizationComplete(tokenData)
+                        .then(() => {
+                            setShowTokenizationModal(false);
+                        })
+                        .catch((error) => {
+                            // Error will be handled by the modal
+                            console.error('Tokenization failed:', error);
+                        });
                 }}
+                property={property}
+                authToken={authToken}
+            />
+
+            {/* Transfer Modal */}
+            <TransferModal
+                visible={showTransferModal}
+                onClose={() => setShowTransferModal(false)}
+                onComplete={handleTransferComplete}
+                property={property}
+                authToken={authToken}
             />
         </SafeAreaView>
     );

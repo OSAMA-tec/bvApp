@@ -9,6 +9,7 @@ import EmptyState from "./EmptyState";
 import AnalysisHeader from "./AnalysisHeader";
 import VideoCard from "./VideoCard";
 import TokenizationModal from "./TokenizationModal";
+import TransferModal from "./TransferModal";
 
 export {
   NFTCard,
@@ -22,4 +23,5 @@ export {
   AnalysisHeader,
   VideoCard,
   TokenizationModal,
+  TransferModal,
 };

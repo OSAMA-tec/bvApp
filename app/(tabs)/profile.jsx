@@ -6,6 +6,7 @@ import * as Animatable from "react-native-animatable";
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 
 import { images, icons } from "../../constants";
 import { useGlobalContext } from "../../context/GlobalProvider";
@@ -947,22 +948,28 @@ const Profile = () => {
         throw new Error('Authentication required');
       }
 
-      const response = await fetch(`${BASE_URL}/properties/my-properties`, {
+      const response = await axios.get(`${BASE_URL}/properties/my-properties`, {
         headers: {
           'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
           'Accept': 'application/json'
         }
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch properties');
+      if (response.data) {
+        setProperties(response.data);
+      } else {
+        throw new Error('No data received from server');
       }
-
-      const data = await response.json();
-      setProperties(data);
     } catch (error) {
       console.error('Error fetching properties:', error);
-      setError(error.message);
+      if (error.response?.status === 403) {
+        // Handle expired or invalid token
+        const { logout } = useGlobalContext();
+        await logout();
+        router.replace('/sign-in');
+      }
+      setError(error.response?.data?.message || error.message);
     } finally {
       setLoading(false);
     }
