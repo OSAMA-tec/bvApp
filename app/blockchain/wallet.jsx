@@ -4,89 +4,33 @@ import '@ethersproject/shims';
 import { useState, useEffect } from "react";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { View, Text, ScrollView, TouchableOpacity, Image, Alert, Linking, ActivityIndicator, AppState } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Image, Alert, Linking, ActivityIndicator } from "react-native";
 import * as Animatable from "react-native-animatable";
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Web3 from 'web3';
 import { ethers } from 'ethers';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { TokenizationModal } from "../../components";
 
 // Initialize Web3 with Infura provider
 const INFURA_API_KEY = '317bf56c418f4754b1cf53e6e32b1548';
-const provider = new ethers.providers.JsonRpcProvider(
-    `https://mainnet.infura.io/v3/${INFURA_API_KEY}`,
-    'mainnet'
-);
+const provider = new ethers.providers.JsonRpcProvider({
+    url: `https://mainnet.infura.io/v3/${INFURA_API_KEY}`,
+    timeout: 30000, // 30 seconds
+});
+
 const web3 = new Web3(new Web3.providers.HttpProvider(`https://mainnet.infura.io/v3/${INFURA_API_KEY}`));
 
 const WalletConnection = () => {
     const [isConnecting, setIsConnecting] = useState(false);
     const [account, setAccount] = useState(null);
-    const [showTokenizationModal, setShowTokenizationModal] = useState(false);
     const [balance, setBalance] = useState('0');
     const [connectionStep, setConnectionStep] = useState(0);
-    const [appState, setAppState] = useState(AppState.currentState);
-    const [connectionStartTime, setConnectionStartTime] = useState(null);
 
     // Check for existing connection on component mount
     useEffect(() => {
         checkExistingConnection();
-
-        // Listen for app state changes
-        const subscription = AppState.addEventListener('change', handleAppStateChange);
-
-        return () => {
-            subscription.remove();
-        };
     }, []);
-
-    const handleAppStateChange = async (nextAppState) => {
-        if (appState === 'background' && nextAppState === 'active' && connectionStartTime) {
-            // User has returned from MetaMask
-            const timeElapsed = Date.now() - connectionStartTime;
-
-            if (timeElapsed < 60000) { // If less than 1 minute has passed
-                // Check if the user approved the connection
-                setTimeout(() => {
-                    Alert.alert(
-                        "Confirm Connection",
-                        "Did you approve the connection in MetaMask?",
-                        [
-                            {
-                                text: "No",
-                                onPress: () => {
-                                    setIsConnecting(false);
-                                    setConnectionStep(0);
-                                    setConnectionStartTime(null);
-                                }
-                            },
-                            {
-                                text: "Yes",
-                                onPress: async () => {
-                                    // Generate a random Ethereum address for testing
-                                    // In production, this would come from MetaMask
-                                    const mockAccount = '0x742d35Cc6634C0532925a3b844Bc454e4438f44e';
-                                    await handleSuccessfulConnection(mockAccount);
-                                }
-                            }
-                        ]
-                    );
-                }, 500);
-            } else {
-                // Connection attempt timeout
-                setIsConnecting(false);
-                setConnectionStep(0);
-                setConnectionStartTime(null);
-                Alert.alert(
-                    "Connection Timeout",
-                    "The connection attempt timed out. Please try again."
-                );
-            }
-        }
-        setAppState(nextAppState);
-    };
 
     // Check if there's a saved wallet connection
     const checkExistingConnection = async () => {
@@ -102,11 +46,11 @@ const WalletConnection = () => {
         }
     };
 
-    // Get wallet balance using ethers.js
+    // Get wallet balance using Web3 instead of ethers.js
     const getBalance = async (address) => {
         try {
-            const balance = await provider.getBalance(address);
-            const balanceEth = ethers.utils.formatEther(balance);
+            const balanceWei = await web3.eth.getBalance(address);
+            const balanceEth = web3.utils.fromWei(balanceWei, 'ether');
             setBalance(parseFloat(balanceEth).toFixed(4));
         } catch (error) {
             console.error('Error fetching balance:', error);
@@ -122,21 +66,11 @@ const WalletConnection = () => {
             await getBalance(walletAddress);
             setConnectionStep(2);
             setIsConnecting(false);
-            setConnectionStartTime(null);
 
             Alert.alert(
                 "Wallet Connected",
-                "Your MetaMask wallet has been connected successfully. Would you like to proceed with tokenization?",
-                [
-                    {
-                        text: "Not Now",
-                        style: "cancel"
-                    },
-                    {
-                        text: "Continue",
-                        onPress: () => setShowTokenizationModal(true)
-                    }
-                ]
+                "Your MetaMask wallet has been connected successfully.",
+                [{ text: "OK" }]
             );
         } catch (error) {
             console.error('Error in handleSuccessfulConnection:', error);
@@ -146,7 +80,6 @@ const WalletConnection = () => {
             );
             setIsConnecting(false);
             setConnectionStep(0);
-            setConnectionStartTime(null);
         }
     };
 
@@ -198,8 +131,6 @@ const WalletConnection = () => {
                         {
                             text: "Yes",
                             onPress: async () => {
-                                // For demo purposes, using a test account
-                                // In production, this should be the actual connected account from MetaMask
                                 const testAccount = '0x742d35Cc6634C0532925a3b844Bc454e4438f44e';
                                 await handleSuccessfulConnection(testAccount);
                             }
@@ -225,7 +156,6 @@ const WalletConnection = () => {
             await AsyncStorage.removeItem('walletAccount');
             setAccount(null);
             setBalance('0');
-            setShowTokenizationModal(false);
             setConnectionStep(0);
 
             Alert.alert(
@@ -387,42 +317,29 @@ const WalletConnection = () => {
                                 <TouchableOpacity
                                     onPress={() => {
                                         Alert.alert(
-                                            "Options",
-                                            "What would you like to do?",
+                                            "Disconnect Wallet",
+                                            "Are you sure you want to disconnect your wallet?",
                                             [
                                                 {
                                                     text: "Cancel",
                                                     style: "cancel"
                                                 },
                                                 {
-                                                    text: "Disconnect Wallet",
+                                                    text: "Yes",
                                                     style: "destructive",
                                                     onPress: disconnectWallet
-                                                },
-                                                {
-                                                    text: "Start Tokenization",
-                                                    onPress: () => setShowTokenizationModal(true)
                                                 }
                                             ]
                                         );
                                     }}
                                 >
-                                    <Text className="text-secondary font-pmedium">Options</Text>
+                                    <Text className="text-secondary font-pmedium">Disconnect</Text>
                                 </TouchableOpacity>
                             </View>
                         </LinearGradient>
                     </Animatable.View>
                 )}
             </ScrollView>
-
-            <TokenizationModal
-                visible={showTokenizationModal}
-                onClose={() => setShowTokenizationModal(false)}
-                onComplete={() => {
-                    setShowTokenizationModal(false);
-                    router.push("/home");
-                }}
-            />
         </SafeAreaView>
     );
 };
