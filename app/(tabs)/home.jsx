@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { FlatList, Image, RefreshControl, Text, View, Dimensions, TouchableOpacity, ScrollView, TextInput } from "react-native";
+import { FlatList, Image, RefreshControl, Text, View, Dimensions, TouchableOpacity, ScrollView, TextInput, ActivityIndicator } from "react-native";
 import * as Animatable from "react-native-animatable";
 import { LinearGradient } from 'expo-linear-gradient';
 import { images, icons } from "../../constants";
@@ -17,6 +17,8 @@ import {
   IoFilterOutline
 } from "react-icons/io5";
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import propertyAPI from "../../lib/propertyApi";
 
 const { width } = Dimensions.get('window');
 
@@ -286,25 +288,20 @@ const CategoryButton = ({ category, isSelected, onPress }) => (
   </TouchableOpacity>
 );
 
-// Add filter options
+// Add filter options before the Home component
 const filterOptions = {
   priceRanges: [
-    { min: 0.5, max: 2, label: "0.5 - 2 ETH" },
-    { min: 2, max: 5, label: "2 - 5 ETH" },
-    { min: 5, max: 10, label: "5 - 10 ETH" },
-    { min: 10, max: null, label: "10+ ETH" }
+    { min: 0, max: 100000, label: "Under $100k" },
+    { min: 100000, max: 500000, label: "$100k - $500k" },
+    { min: 500000, max: 1000000, label: "$500k - $1M" },
+    { min: 1000000, max: null, label: "Over $1M" }
   ],
-  propertyTypes: ["Villa", "Apartment", "Penthouse", "Mansion"],
+  propertyTypes: ["residential", "commercial", "land"],
   locations: ["Miami", "New York", "Dubai", "Beverly Hills", "London"]
 };
 
 // Quick Filters Component
-const QuickFilters = ({
-  activeFilter,
-  setActiveFilter,
-  selectedFilters,
-  handleFilterSelect
-}) => (
+const QuickFilters = ({ activeFilter, setActiveFilter, selectedFilters, handleFilterSelect }) => (
   <Animatable.View
     animation="fadeInUp"
     duration={500}
@@ -324,19 +321,13 @@ const QuickFilters = ({
           className="rounded-full px-4 py-2 flex-row items-center"
         >
           <MaterialCommunityIcons
-            name="currency-eth"
+            name="currency-usd"
             size={20}
             color={activeFilter === 'price' ? "#fff" : "#af67db"}
           />
           <Text className={`ml-2 ${activeFilter === 'price' ? 'text-white' : 'text-gray-100'}`}>
             {selectedFilters.priceRange?.label || "Price Range"}
           </Text>
-          <MaterialCommunityIcons
-            name="chevron-down"
-            size={20}
-            color={activeFilter === 'price' ? "#fff" : "#af67db"}
-            style={{ marginLeft: 8 }}
-          />
         </LinearGradient>
       </TouchableOpacity>
 
@@ -356,12 +347,6 @@ const QuickFilters = ({
           <Text className={`ml-2 ${activeFilter === 'type' ? 'text-white' : 'text-gray-100'}`}>
             {selectedFilters.propertyType || "Property Type"}
           </Text>
-          <MaterialCommunityIcons
-            name="chevron-down"
-            size={20}
-            color={activeFilter === 'type' ? "#fff" : "#af67db"}
-            style={{ marginLeft: 8 }}
-          />
         </LinearGradient>
       </TouchableOpacity>
 
@@ -381,12 +366,6 @@ const QuickFilters = ({
           <Text className={`ml-2 ${activeFilter === 'location' ? 'text-white' : 'text-gray-100'}`}>
             {selectedFilters.location || "Location"}
           </Text>
-          <MaterialCommunityIcons
-            name="chevron-down"
-            size={20}
-            color={activeFilter === 'location' ? "#fff" : "#af67db"}
-            style={{ marginLeft: 8 }}
-          />
         </LinearGradient>
       </TouchableOpacity>
     </ScrollView>
@@ -455,55 +434,116 @@ const QuickFilters = ({
 
 const Home = () => {
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [properties, setProperties] = useState([]);
   const featuredListRef = useRef(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [selectedPriceRange, setSelectedPriceRange] = useState(null);
-  const [selectedPropertyType, setSelectedPropertyType] = useState(null);
-  const [selectedLocation, setSelectedLocation] = useState(null);
-  const [filteredProperties, setFilteredProperties] = useState(nftData);
   const [activeFilter, setActiveFilter] = useState(null);
   const [selectedFilters, setSelectedFilters] = useState({
     priceRange: null,
     propertyType: null,
     location: null
   });
-  const [showFilters, setShowFilters] = useState(false);
 
-  // Filter handling function
-  const handleFilterSelect = (filterType, value) => {
+  // Fetch properties
+  const fetchProperties = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication required. Please log in.');
+      }
+      const data = await propertyAPI.getProperties(token);
+      setProperties(data);
+    } catch (error) {
+      console.error('Error fetching properties:', error);
+      setError(error.message || 'Failed to fetch properties');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initial fetch
+  useEffect(() => {
+    fetchProperties();
+  }, []);
+
+  // Handle refresh
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchProperties();
+    setRefreshing(false);
+  };
+
+  // Filter properties based on selected filters
+  const getFilteredProperties = useCallback(() => {
+    let filtered = properties;
+
+    if (selectedCategory !== 'All') {
+      filtered = filtered.filter(property =>
+        property.propertyType.toLowerCase().includes(selectedCategory.toLowerCase())
+      );
+    }
+
+    if (selectedFilters.priceRange) {
+      filtered = filtered.filter(property => {
+        const price = property.price;
+        return price >= selectedFilters.priceRange.min &&
+          (!selectedFilters.priceRange.max || price <= selectedFilters.priceRange.max);
+      });
+    }
+
+    if (selectedFilters.propertyType) {
+      filtered = filtered.filter(property =>
+        property.propertyType.toLowerCase() === selectedFilters.propertyType.toLowerCase()
+      );
+    }
+
+    if (selectedFilters.location) {
+      filtered = filtered.filter(property =>
+        property.address.toLowerCase().includes(selectedFilters.location.toLowerCase())
+      );
+    }
+
+    return filtered;
+  }, [properties, selectedCategory, selectedFilters]);
+
+  // Add handleFilterSelect function
+  const handleFilterSelect = useCallback((filterType, value) => {
     setSelectedFilters(prev => ({
       ...prev,
       [filterType]: value
     }));
-
-    // Apply filters
-    let filtered = nftData;
-
-    if (value) {
-      switch (filterType) {
-        case 'priceRange':
-          filtered = filtered.filter(property => {
-            const price = parseFloat(property.price);
-            return price >= value.min && (!value.max || price <= value.max);
-          });
-          break;
-        case 'propertyType':
-          filtered = filtered.filter(property =>
-            property.propertyType.toLowerCase().includes(value.toLowerCase())
-          );
-          break;
-        case 'location':
-          filtered = filtered.filter(property =>
-            property.location.toLowerCase().includes(value.toLowerCase())
-          );
-          break;
-      }
-    }
-
-    setFilteredProperties(filtered);
     setActiveFilter(null);
-  };
+  }, []);
+
+  // Render loading state
+  if (loading && !refreshing) {
+    return (
+      <SafeAreaView className="flex-1 bg-primary justify-center items-center">
+        <ActivityIndicator size="large" color="#af67db" />
+        <Text className="text-white mt-4">Loading properties...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  // Render error state
+  if (error && !refreshing) {
+    return (
+      <SafeAreaView className="flex-1 bg-primary justify-center items-center px-4">
+        <Text className="text-white text-center mb-4">{error}</Text>
+        <TouchableOpacity
+          onPress={fetchProperties}
+          className="bg-secondary px-6 py-3 rounded-xl"
+        >
+          <Text className="text-white font-pbold">Try Again</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
 
   const renderHeader = () => (
     <View>
@@ -637,10 +677,15 @@ const Home = () => {
 
         <FlatList
           ref={featuredListRef}
-          data={filteredProperties}
-          keyExtractor={(item) => item.id}
+          data={getFilteredProperties()}
+          keyExtractor={(item) => item._id}
           renderItem={({ item, index }) => (
-            <FeaturedNFT item={item} index={index} />
+            <Animatable.View
+              animation="fadeInUp"
+              delay={index * 200}
+            >
+              <NFTCard {...item} />
+            </Animatable.View>
           )}
           horizontal
           pagingEnabled
@@ -655,7 +700,7 @@ const Home = () => {
 
         {/* Pagination Dots */}
         <View className="flex-row justify-center mt-4 space-x-2">
-          {filteredProperties.map((_, index) => (
+          {getFilteredProperties().map((_, index) => (
             <View
               key={index}
               className={`h-2 rounded-full ${index === currentIndex
@@ -672,8 +717,8 @@ const Home = () => {
   return (
     <SafeAreaView className="flex-1 bg-primary">
       <FlatList
-        data={filteredProperties}
-        keyExtractor={(item) => item.id}
+        data={getFilteredProperties()}
+        keyExtractor={(item) => item._id}
         renderItem={({ item, index }) => (
           <Animatable.View
             animation="fadeInUp"
@@ -686,10 +731,7 @@ const Home = () => {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              setTimeout(() => setRefreshing(false), 1500);
-            }}
+            onRefresh={handleRefresh}
             tintColor="#af67db"
           />
         }
@@ -697,6 +739,11 @@ const Home = () => {
         contentContainerStyle={{
           paddingBottom: 100
         }}
+        ListEmptyComponent={() => (
+          <View className="flex-1 justify-center items-center py-20">
+            <Text className="text-white text-lg">No properties found</Text>
+          </View>
+        )}
       />
     </SafeAreaView>
   );
